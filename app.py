@@ -1,6 +1,7 @@
 import math
 import re
 import io
+import os
 import base64
 import pandas as pd
 from datetime import datetime, date
@@ -44,6 +45,17 @@ def apply_tr_theme():
             background-color: #D64001;
             color: #FFFFFF;
         }
+        .stDownloadButton > button {
+            background-color: #FF8000;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .stDownloadButton > button:hover {
+            background-color: #D64001;
+            color: #FFFFFF;
+        }
         hr {
             border-color: #FF8000;
         }
@@ -53,12 +65,47 @@ def apply_tr_theme():
             border-radius: 4px;
             padding: 10px;
         }
+        .instrucoes-box {
+            background-color: #E9E9E9;
+            border-left: 4px solid #FF8000;
+            border-radius: 4px;
+            padding: 16px 20px;
+            margin: 12px 0;
+            color: #444444;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        .instrucoes-box h4 {
+            color: #FF8000;
+            margin-top: 14px;
+            margin-bottom: 6px;
+        }
+        .instrucoes-box h4:first-child {
+            margin-top: 0;
+        }
         </style>
     """, unsafe_allow_html=True)
 
 
 # ==============================
-# TABELAS E FUNÇÕES AUXILIARES
+# CARREGAMENTO DO MODELO .BGR
+# ==============================
+def carregar_bgr_bytes():
+    """
+    Lê o arquivo bgr_base64.txt (Base64 do .bgr) e devolve os bytes binários.
+    """
+    caminho = os.path.join(os.path.dirname(__file__), "bgr_base64.txt")
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            b64 = f.read().strip()
+        b64 = "".join(b64.split())  # remove espaços/quebras
+        return base64.b64decode(b64)
+    except Exception as e:
+        st.warning(f"⚠ Não foi possível carregar o modelo .bgr: {e}")
+        return None
+
+
+# ==============================
+# TABELAS E CONSTANTES
 # ==============================
 
 TABELA_IR_TRADICIONAL = [
@@ -84,6 +131,9 @@ TETO_INSS_2025             = 8157.41
 TETO_INSS_2026             = 8475.55
 
 
+# ==============================
+# FUNÇÕES AUXILIARES
+# ==============================
 def excel_date_to_datetime(value):
     if value is None:
         return None
@@ -281,103 +331,6 @@ def calcular_irrf_2026_por_base(BC, rendimento_tributavel):
         return 0.0
     red = reducao_mensal_2026(rendimento_tributavel)
     return max(truncar(ir_tabela - min(red, ir_tabela), casas=2), 0.0)
-
-
-def calcular_irrf_mais_vantajoso_base100(base_bruta, dependentes, tabela, ded_simpl):
-    if base_bruta is None or base_bruta <= 0:
-        return 0.0, 0.0
-    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
-    base_geral = truncar(base_bruta - red_dep, casas=2)
-    ir_geral   = calcular_irrf_tabela(base_geral, tabela)
-    base_simpl = truncar(base_bruta - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_tabela(base_simpl, tabela)
-    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
-        return ir_simpl, base_simpl
-    return ir_geral, base_geral
-
-
-def calcular_irrf_base60_legal(bruto, inss, dependentes, tabela):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base60  = truncar(bruto * 0.60, casas=2)
-    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    base    = truncar(base60 - inss - truncar(dep_int * VALOR_DEP, casas=2), casas=2)
-    return calcular_irrf_tabela(base, tabela), base
-
-
-def calcular_irrf_base60_mais_vantajoso_2025(bruto, inss, dependentes, tabela, ded_simpl):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base60     = truncar(bruto * 0.60, casas=2)
-    ir_geral, base_geral = calcular_irrf_base60_legal(bruto, inss, dependentes, tabela)
-    base_simpl = truncar(base60 - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_tabela(base_simpl, tabela)
-    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
-        return ir_simpl, base_simpl
-    return ir_geral, base_geral
-
-
-def calcular_irrf_base10_legal(bruto, inss, dependentes, tabela):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base10  = truncar(bruto * 0.10, casas=2)
-    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    base    = truncar(base10 - inss - truncar(dep_int * VALOR_DEP, casas=2), casas=2)
-    return calcular_irrf_tabela(base, tabela), base
-
-
-def calcular_irrf_base10_mais_vantajoso_2025(bruto, inss, dependentes, tabela, ded_simpl):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base10     = truncar(bruto * 0.10, casas=2)
-    ir_geral, base_geral = calcular_irrf_base10_legal(bruto, inss, dependentes, tabela)
-    base_simpl = truncar(base10 - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_tabela(base_simpl, tabela)
-    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
-        return ir_simpl, base_simpl
-    return ir_geral, base_geral
-
-
-def calcular_irrf_base60_mais_vantajoso_2026(bruto, inss, dependentes, ded_simpl, rendimento_tributavel):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base60     = truncar(bruto * 0.60, casas=2)
-    dep_int    = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    base_legal = truncar(base60 - inss - truncar(dep_int * VALOR_DEP, casas=2), casas=2)
-    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
-    base_simpl = truncar(base60 - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
-    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
-        return ir_simpl, base_simpl
-    return ir_legal, base_legal
-
-
-def calcular_irrf_base10_mais_vantajoso_2026(bruto, inss, dependentes, ded_simpl, rendimento_tributavel):
-    if bruto is None or bruto <= 0:
-        return 0.0, 0.0
-    base10     = truncar(bruto * 0.10, casas=2)
-    dep_int    = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    base_legal = truncar(base10 - inss - truncar(dep_int * VALOR_DEP, casas=2), casas=2)
-    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
-    base_simpl = truncar(base10 - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
-    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
-        return ir_simpl, base_simpl
-    return ir_legal, base_legal
-
-
-def calcular_irrf_mais_vantajoso_2026_base100(base_bruta, dependentes, rendimento_tributavel, ded_simpl):
-    if base_bruta is None or base_bruta <= 0:
-        return 0.0, 0.0, "nenhum"
-    dep_int    = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
-    base_legal = truncar(base_bruta - truncar(dep_int * VALOR_DEP, casas=2), casas=2)
-    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
-    base_simpl = truncar(base_bruta - ded_simpl, casas=2)
-    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
-    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
-        return ir_simpl, base_simpl, "simplificada"
-    return ir_legal, base_legal, "legal"
 
 
 def calcular_irrf_acumulado_generico(
@@ -638,13 +591,6 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     inss_frete_sest  = 0.0
     inss_frete_senat = 0.0
 
-    # ------------------------------------------------------------------
-    # BASE INSS
-    # base_inss_registro_original → bruto integral (ou 20% para frete)
-    # É o valor gravado no campo base_inss do TXT.
-    # base_inss_registro_limitada → base após aplicação do teto acumulado
-    # É o valor usado exclusivamente para calcular o valor do INSS.
-    # ------------------------------------------------------------------
     base_inss_registro_original = bruto
     aliquota_inss = 0.11
 
@@ -672,23 +618,20 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     ac["base_inss_empresa"]   = base_empresa_nova
     ac["inss_retido_empresa"] = truncar(ac["inss_retido_empresa"] + inss, casas=2)
 
-    # Campo base_inss no TXT → rendimento bruto original (sem limitação de teto)
     base_inss_saida = base_inss_registro_original
 
-    # ------------------------------------------------------------------
     # IRRF acumulado
-    # CORREÇÃO V3.6: INSS deduzido da base do IRRF para todos os eSociais
-    # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
-    dep_out = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
+    dep_out    = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
+    deduz_inss = esocial_int in (711, 712)
 
     ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"]      + rendimento_tributavel_registro, casas=2)
     ac["inss_dedutivel_irrf"] = truncar(ac["inss_dedutivel_irrf"] + inss,                           casas=2)
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
     rendimento_tributavel_acum = ac["rend_trib_irrf"]
-    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"]   # ← CORREÇÃO: sempre deduz INSS
+    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"] if deduz_inss else 0.0
     dependentes_acum           = ac["dependentes"]
 
     _ano = ano_ir if ano_ir in (2025, 2026) else 2025
@@ -707,8 +650,8 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         ded_simpl=ded_simpl,
     )
 
-    irrf_ja_retido = truncar(ac["irrf_retido"], casas=2)
-    ir_calculado   = max(truncar(ir_total_mes - irrf_ja_retido, casas=2), 0.0)
+    irrf_ja_retido    = truncar(ac["irrf_retido"], casas=2)
+    ir_calculado      = max(truncar(ir_total_mes - irrf_ja_retido, casas=2), 0.0)
     ac["irrf_retido"] = truncar(ac["irrf_retido"] + ir_calculado, casas=2)
 
     base_irrf = base_irrf_mes
@@ -720,7 +663,6 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         perc_iss  = 0.0
         valor_iss = 0.0
 
-    # Garantir não-negativos na saída
     valor_iss        = limpar_negativo(valor_iss)
     base_inss_saida  = limpar_negativo(base_inss_saida)
     inss_frete_sest  = limpar_negativo(inss_frete_sest)
@@ -729,9 +671,6 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     base_irrf        = limpar_negativo(base_irrf)
     ir_calculado     = limpar_negativo(ir_calculado)
 
-    # ------------------------------------------------------------------
-    # Montagem dos campos posicionais (total = 266 caracteres)
-    # ------------------------------------------------------------------
     try:
         campo_codigo_empresa   = fmt_int(codigo_empresa,  7)
         campo_codigo_contrib   = fmt_int(cod_contrib,    10)
@@ -755,27 +694,27 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         campo_valor_ir         = fmt_num(ir_calculado,     8, casas=2, permitir_negativo=False)
 
         registro = (
-            campo_codigo_empresa   +   #   7
-            campo_codigo_contrib   +   #  10
-            campo_competencia      +   #   6
-            campo_desc_atividade   +   # 100
-            campo_num_rpa          +   #  10
-            campo_rendimento_bruto +   #  11
-            campo_percentual_iss   +   #   5
-            campo_valor_iss        +   #  11
-            campo_data_venc_iss    +   #   8
-            campo_base_inss        +   #  11
-            campo_inss_frete_sest  +   #   8
-            campo_inss_frete_senat +   #   8
-            campo_valor_inss       +   #   8
-            campo_pensao_alim      +   #  11
-            campo_outros_desc      +   #  11
-            campo_outros_prov      +   #  11
-            campo_data_pagto       +   #   8
-            campo_base_irrf        +   #  11
-            campo_qtd_dep_ir       +   #   3
-            campo_valor_ir             #   8
-        )                              # = 266
+            campo_codigo_empresa   +
+            campo_codigo_contrib   +
+            campo_competencia      +
+            campo_desc_atividade   +
+            campo_num_rpa          +
+            campo_rendimento_bruto +
+            campo_percentual_iss   +
+            campo_valor_iss        +
+            campo_data_venc_iss    +
+            campo_base_inss        +
+            campo_inss_frete_sest  +
+            campo_inss_frete_senat +
+            campo_valor_inss       +
+            campo_pensao_alim      +
+            campo_outros_desc      +
+            campo_outros_prov      +
+            campo_data_pagto       +
+            campo_base_irrf        +
+            campo_qtd_dep_ir       +
+            campo_valor_ir
+        )
 
     except Exception as e:
         log.append(f"ERRO ao montar registro do contrib {cod_contrib}: {e}")
@@ -792,7 +731,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
 
 # ==============================
-# GERAÇÃO DO TXT (versão Streamlit)
+# GERAÇÃO DO TXT
 # ==============================
 def gerar_txt_streamlit(arquivo_bytes, log):
     try:
@@ -842,13 +781,14 @@ def gerar_txt_streamlit(arquivo_bytes, log):
 # ==============================
 def main():
     st.set_page_config(
-        page_title=f"Domínio Sistemas | Thomson Reuters",
+        page_title="Domínio Sistemas | Thomson Reuters",
         page_icon="🟠",
         layout="wide",
         initial_sidebar_state="expanded",
     )
     apply_tr_theme()
 
+    # ----------- Cabeçalho -----------
     st.markdown(
         f"""
         <div style="background:#444444; padding:24px 28px 18px 28px; border-radius:8px;
@@ -864,17 +804,101 @@ def main():
         unsafe_allow_html=True,
     )
 
-    if "log"          not in st.session_state:
-        st.session_state.log          = [f"Aplicação pronta. Versão: {VERSAO}"]
-    if "txt_gerado"   not in st.session_state:
-        st.session_state.txt_gerado   = None
+    # ----------- Sidebar -----------
+    with st.sidebar:
+        st.markdown("### 📥 Modelo de Relatório")
+        st.markdown(
+            "Baixe o modelo da **Relação de Rendimentos – RPA** (.bgr) "
+            "para importar no Domínio Sistemas."
+        )
+
+        bgr_bytes = carregar_bgr_bytes()
+        if bgr_bytes is not None:
+            st.download_button(
+                label="⬇ Baixar Relação de Rendimentos - RPA.bgr",
+                data=bgr_bytes,
+                file_name="Relação de Rendimentos - RPA.bgr",
+                mime="application/octet-stream",
+                use_container_width=True,
+            )
+        else:
+            st.info("Arquivo modelo indisponível no momento.")
+
+        st.markdown("---")
+        st.markdown("### ℹ Sobre")
+        st.markdown(f"**Versão:** {VERSAO}")
+        st.markdown("**Thomson Reuters**")
+        st.markdown("**Domínio Sistemas**")
+
+    # ----------- Instruções de uso -----------
+    with st.expander("📖 **Instruções de Uso** — clique para expandir", expanded=False):
+        st.markdown(
+            """
+            <div class="instrucoes-box">
+
+            <h4>🔹 Passo 1 — Baixar o modelo de relatório</h4>
+            <p>No menu lateral, clique em <b>⬇ Baixar Relação de Rendimentos - RPA.bgr</b>
+            e salve o arquivo no seu computador.</p>
+
+            <h4>🔹 Passo 2 — Importar o relatório no Domínio Sistemas</h4>
+            <ol>
+                <li>Abra o <b>Domínio Sistemas / Folha</b>.</li>
+                <li>Acesse <b>Utilitários → Gerador de Relatórios → Importar</b>.</li>
+                <li>Selecione o arquivo <code>Relação de Rendimentos - RPA.bgr</code> baixado.</li>
+            </ol>
+
+            <h4>🔹 Passo 3 — Gerar o relatório em Excel</h4>
+            <ol>
+                <li>No Domínio, execute o relatório <b>Relação de Rendimentos - RPA</b>.</li>
+                <li>Informe a <b>empresa</b> e a <b>competência</b> desejadas.</li>
+                <li>Exporte/salve o resultado em formato <b>Excel (.xlsx)</b>.</li>
+            </ol>
+
+            <h4>🔹 Passo 4 — Gerar o arquivo TXT</h4>
+            <ol>
+                <li>Nesta página, clique em <b>Browse files</b> e selecione o Excel exportado.</li>
+                <li>Clique em <b>▶ Gerar arquivo TXT</b>.</li>
+                <li>Aguarde o processamento e clique em <b>⬇ Baixar arquivo TXT</b>.</li>
+            </ol>
+
+            <h4>🔹 Passo 5 — Importar o TXT de volta no Domínio</h4>
+            <p>Use o módulo de importação de lançamentos do Domínio para carregar o
+            arquivo TXT gerado (layout posicional de <b>266 caracteres</b>).</p>
+
+            <hr>
+
+            <h4>⚠ Observações importantes</h4>
+            <ul>
+                <li>O Excel deve ser <b>exatamente</b> o gerado pelo modelo .bgr fornecido —
+                    qualquer alteração nas colunas pode causar erro de leitura.</li>
+                <li>Datas de pagamento <b>anteriores a 01/05/2025</b> usam a tabela de IR antiga.</li>
+                <li>Pagamentos em <b>2026</b> aplicam automaticamente a redução do IR (Lei 2026).</li>
+                <li>O cálculo do INSS respeita o <b>teto previdenciário</b> acumulado no mês.</li>
+                <li>Categorias e-Social <b>711/731/734</b> aplicam base de IR de 60%; <b>712</b> aplica 10%.</li>
+                <li>Para fretes (e-Social <b>712</b> e <b>734</b>), a base de INSS é 20% do bruto, com SEST/SENAT.</li>
+                <li>Em caso de erro, verifique o <b>Log de processamento</b> ao final da página.</li>
+            </ul>
+
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # ----------- Estado da sessão -----------
+    if "log" not in st.session_state:
+        st.session_state.log = [f"Aplicação pronta. Versão: {VERSAO}"]
+    if "txt_gerado" not in st.session_state:
+        st.session_state.txt_gerado = None
     if "nome_arquivo" not in st.session_state:
         st.session_state.nome_arquivo = "saida.txt"
 
+    # ----------- Upload -----------
     arquivo = st.file_uploader(
         "Excel de origem",
         type=["xlsx", "xls"],
-        help="Selecione o arquivo Excel com os dados de RPA",
+        help="Selecione o arquivo Excel exportado do relatório 'Relação de Rendimentos - RPA'",
     )
 
     col1, col2 = st.columns([1, 1])
@@ -890,22 +914,22 @@ def main():
         limpar = st.button("🗑 Limpar", use_container_width=True)
 
     if limpar:
-        st.session_state.log          = ["Campos limpos."]
-        st.session_state.txt_gerado   = None
+        st.session_state.log = ["Campos limpos."]
+        st.session_state.txt_gerado = None
         st.session_state.nome_arquivo = "saida.txt"
         st.rerun()
 
     if gerar and arquivo is not None:
-        st.session_state.log          = ["Iniciando geração do arquivo TXT..."]
-        st.session_state.txt_gerado   = None
+        st.session_state.log = ["Iniciando geração do arquivo TXT..."]
+        st.session_state.txt_gerado = None
         st.session_state.nome_arquivo = "saida.txt"
 
         linhas, meta = gerar_txt_streamlit(arquivo.read(), st.session_state.log)
 
         if linhas and meta:
             conteudo = "\n".join(linhas) + "\n"
-            st.session_state.txt_gerado   = conteudo.encode("latin-1", errors="replace")
-            cod_emp     = str(meta["codigo_empresa"])
+            st.session_state.txt_gerado = conteudo.encode("latin-1", errors="replace")
+            cod_emp = str(meta["codigo_empresa"])
             competencia = competencia_aaaamm(meta["competencia"])
             st.session_state.nome_arquivo = f"{cod_emp}_RPA_competencia_{competencia}.txt"
 
@@ -922,9 +946,10 @@ def main():
             type="primary",
         )
 
+    # ----------- Log -----------
     st.markdown("**Log de processamento**")
     log_texto = "\n".join(st.session_state.log)
-    tem_erro  = any(str(l).startswith("ERRO") for l in st.session_state.log)
+    tem_erro = any(str(l).startswith("ERRO") for l in st.session_state.log)
     cor_borda = "#D32F2F" if tem_erro else "#388E3C"
 
     st.markdown(
