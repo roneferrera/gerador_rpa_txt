@@ -172,7 +172,8 @@ def truncar(valor, casas=2):
     return math.floor(float(valor) * fator) / fator
 
 
-def limpar_negativo(valor):
+def nn(valor):
+    """Garante que o valor nunca seja negativo (non-negative)."""
     if valor is None:
         return 0.0
     try:
@@ -180,6 +181,10 @@ def limpar_negativo(valor):
     except Exception:
         return 0.0
     return 0.0 if v < 0 else v
+
+
+def limpar_negativo(valor):
+    return nn(valor)
 
 
 def fmt_num(valor, tamanho, casas=2, permitir_negativo=False):
@@ -282,14 +287,14 @@ def chave_acumulacao_mes(meta, reg, data_pagto_dt):
 
 
 def obter_rendimento_tributavel_irrf(bruto, esocial_int):
-    bruto = limpar_negativo(bruto)
+    bruto = nn(bruto)
     if bruto <= 0:
         return 0.0
     if esocial_int in (711, 731, 734):
-        return truncar(bruto * 0.60, casas=2)
+        return nn(truncar(bruto * 0.60, casas=2))
     if esocial_int == 712:
-        return truncar(bruto * 0.10, casas=2)
-    return truncar(bruto, casas=2)
+        return nn(truncar(bruto * 0.10, casas=2))
+    return nn(truncar(bruto, casas=2))
 
 
 def calcular_irrf_tabela(base, tabela):
@@ -301,7 +306,7 @@ def calcular_irrf_tabela(base, tabela):
             aliquota, deducao = aliq, ded
             break
     irrf = truncar(truncar(base * aliquota, casas=2) - deducao, casas=2)
-    return max(irrf, 0.0)
+    return nn(irrf)
 
 
 def reducao_mensal_2026(rendimento_tributavel):
@@ -316,7 +321,7 @@ def reducao_mensal_2026(rendimento_tributavel):
     if rt <= 5000.00:
         return 312.89
     if rt <= 7350.00:
-        return truncar(978.62 - truncar(0.133145 * rt, casas=2), casas=2)
+        return nn(truncar(978.62 - truncar(0.133145 * rt, casas=2), casas=2))
     return 0.0
 
 
@@ -327,7 +332,7 @@ def calcular_irrf_2026_por_base(BC, rendimento_tributavel):
     if ir_tabela <= 0:
         return 0.0
     red = reducao_mensal_2026(rendimento_tributavel)
-    return max(truncar(ir_tabela - min(red, ir_tabela), casas=2), 0.0)
+    return nn(truncar(ir_tabela - min(red, ir_tabela), casas=2))
 
 
 def calcular_irrf_acumulado_generico(
@@ -339,30 +344,28 @@ def calcular_irrf_acumulado_generico(
     ded_simpl,
 ):
     """
-    CORREÇÃO V3.7:
-    Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
-    - Se INSS + dependentes >= simplificada → dedução legal (INSS + dep)
-    - Se INSS + dependentes <  simplificada → dedução simplificada
+    V3.7 — Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
+    Todos os valores intermediários e de saída são garantidos >= 0.
     """
     if rendimento_tributavel_acum is None or rendimento_tributavel_acum <= 0:
         return 0.0, 0.0
 
     dep_int       = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    red_dep       = truncar(dep_int * VALOR_DEP, casas=2)
-    deducao_legal = truncar(inss_dedutivel_acum + red_dep, casas=2)
+    red_dep       = nn(truncar(dep_int * VALOR_DEP, casas=2))
+    deducao_legal = nn(truncar(inss_dedutivel_acum + red_dep, casas=2))
 
-    # Escolhe a maior dedução
+    # Usa a MAIOR dedução: se INSS + dep >= simplificada → legal; senão → simplificada
     if deducao_legal >= ded_simpl:
-        base = max(truncar(rendimento_tributavel_acum - deducao_legal, casas=2), 0.0)
+        base = nn(truncar(rendimento_tributavel_acum - deducao_legal, casas=2))
     else:
-        base = max(truncar(rendimento_tributavel_acum - ded_simpl, casas=2), 0.0)
+        base = nn(truncar(rendimento_tributavel_acum - ded_simpl, casas=2))
 
     if ano_ir == 2026:
         ir = calcular_irrf_2026_por_base(base, rendimento_tributavel_acum)
     else:
         ir = calcular_irrf_tabela(base, tabela_ir)
 
-    return ir, base
+    return nn(ir), nn(base)
 
 
 # ==============================
@@ -519,12 +522,12 @@ def ler_planilha_rpa(caminho_excel, log):
                 "esocial":     esocial,
                 "rpa_num":     rpa_num,
                 "atividade":   atividade,
-                "bruto":       _num_or_zero(bruto),
+                "bruto":       nn(_num_or_zero(bruto)),
                 "data_pagto":  data_pagto,
-                "pensao_alim": _num_or_zero(pensao),
-                "outros_desc": _num_or_zero(outros_desc),
-                "outros_prov": _num_or_zero(outros_prov),
-                "perc_iss":    _num_or_zero(perc_iss),
+                "pensao_alim": nn(_num_or_zero(pensao)),
+                "outros_desc": nn(_num_or_zero(outros_desc)),
+                "outros_prov": nn(_num_or_zero(outros_prov)),
+                "perc_iss":    nn(_num_or_zero(perc_iss)),
                 "valor_iss":   0.0,
                 "data_iss":    data_iss,
                 "linha_excel": i + 1,
@@ -565,12 +568,12 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     dependentes = reg["dependentes"]
     rpa_num     = reg["rpa_num"]
     atividade   = reg["atividade"]
-    bruto       = limpar_negativo(reg["bruto"])
+    bruto       = nn(reg["bruto"])
 
-    perc_iss    = limpar_negativo(reg.get("perc_iss",    0.0))
-    pensao_alim = limpar_negativo(reg.get("pensao_alim", 0.0))
-    outros_desc = limpar_negativo(reg.get("outros_desc", 0.0))
-    outros_prov = limpar_negativo(reg.get("outros_prov", 0.0))
+    perc_iss    = nn(reg.get("perc_iss",    0.0))
+    pensao_alim = nn(reg.get("pensao_alim", 0.0))
+    outros_desc = nn(reg.get("outros_desc", 0.0))
+    outros_prov = nn(reg.get("outros_prov", 0.0))
 
     dt_iss        = excel_date_to_datetime(reg.get("data_iss"))
     data_venc_iss = "00000000" if dt_iss is None else dt_iss.strftime("%Y%m%d")
@@ -601,51 +604,47 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     # ------------------------------------------------------------------
     # BASE INSS
     # ------------------------------------------------------------------
-    base_inss_registro_original = bruto
+    base_inss_registro_original = nn(bruto)
     aliquota_inss = 0.11
 
     if esocial_int in (712, 734):
-        base_inss_registro_original = truncar(bruto * 0.20, casas=2)
+        base_inss_registro_original = nn(truncar(bruto * 0.20, casas=2))
         aliquota_inss    = 0.20 if esocial_int == 734 else 0.11
-        inss_frete_sest  = truncar(base_inss_registro_original * 0.015, casas=2)
-        inss_frete_senat = truncar(base_inss_registro_original * 0.010, casas=2)
+        inss_frete_sest  = nn(truncar(base_inss_registro_original * 0.015, casas=2))
+        inss_frete_senat = nn(truncar(base_inss_registro_original * 0.010, casas=2))
 
     teto_inss          = teto_inss_por_data_pagto(data_pagto_dt)
-    outras_fontes_base = max(truncar(ac.get("outras_fontes_base", 0.0), casas=2), 0.0)
-    saldo_teto         = max(truncar(teto_inss - outras_fontes_base, casas=2), 0.0)
+    outras_fontes_base = nn(truncar(ac.get("outras_fontes_base", 0.0), casas=2))
+    saldo_teto         = nn(truncar(teto_inss - outras_fontes_base, casas=2))
 
-    base_empresa_anterior = truncar(ac["base_inss_empresa"], casas=2)
-    base_empresa_nova     = truncar(base_empresa_anterior + base_inss_registro_original, casas=2)
+    base_empresa_anterior = nn(truncar(ac["base_inss_empresa"], casas=2))
+    base_empresa_nova     = nn(truncar(base_empresa_anterior + base_inss_registro_original, casas=2))
 
     base_limitada_anterior      = min(base_empresa_anterior, saldo_teto)
     base_limitada_nova          = min(base_empresa_nova,     saldo_teto)
-    base_inss_registro_limitada = max(
-        truncar(base_limitada_nova - base_limitada_anterior, casas=2), 0.0
-    )
+    base_inss_registro_limitada = nn(truncar(base_limitada_nova - base_limitada_anterior, casas=2))
 
-    inss = max(truncar(base_inss_registro_limitada * aliquota_inss, casas=2), 0.0)
+    inss = nn(truncar(base_inss_registro_limitada * aliquota_inss, casas=2))
 
-    ac["base_inss_empresa"]   = base_empresa_nova
-    ac["inss_retido_empresa"] = truncar(ac["inss_retido_empresa"] + inss, casas=2)
+    ac["base_inss_empresa"]   = nn(base_empresa_nova)
+    ac["inss_retido_empresa"] = nn(truncar(ac["inss_retido_empresa"] + inss, casas=2))
 
-    base_inss_saida = base_inss_registro_original
+    base_inss_saida = nn(base_inss_registro_original)
 
     # ------------------------------------------------------------------
     # IRRF acumulado
-    # CORREÇÃO V3.7:
-    # - INSS deduzido para TODOS os eSociais (removida restrição 711/712)
-    # - Critério: maior dedução entre (INSS + dep) e simplificada
+    # V3.7: INSS sempre deduzido; critério = maior dedução
     # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
     dep_out = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
 
-    ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"]      + rendimento_tributavel_registro, casas=2)
-    ac["inss_dedutivel_irrf"] = truncar(ac["inss_dedutivel_irrf"] + inss,                           casas=2)
+    ac["rend_trib_irrf"]      = nn(truncar(ac["rend_trib_irrf"]      + rendimento_tributavel_registro, casas=2))
+    ac["inss_dedutivel_irrf"] = nn(truncar(ac["inss_dedutivel_irrf"] + inss,                           casas=2))
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
-    rendimento_tributavel_acum = ac["rend_trib_irrf"]
-    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"]  # sempre deduz INSS
+    rendimento_tributavel_acum = nn(ac["rend_trib_irrf"])
+    inss_dedutivel_acum        = nn(ac["inss_dedutivel_irrf"])  # sempre deduz INSS
     dependentes_acum           = ac["dependentes"]
 
     _ano = ano_ir if ano_ir in (2025, 2026) else 2025
@@ -664,28 +663,33 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         ded_simpl=ded_simpl,
     )
 
-    irrf_ja_retido    = truncar(ac["irrf_retido"], casas=2)
-    ir_calculado      = max(truncar(ir_total_mes - irrf_ja_retido, casas=2), 0.0)
-    ac["irrf_retido"] = truncar(ac["irrf_retido"] + ir_calculado, casas=2)
+    irrf_ja_retido    = nn(truncar(ac["irrf_retido"], casas=2))
+    ir_calculado      = nn(truncar(ir_total_mes - irrf_ja_retido, casas=2))
+    ac["irrf_retido"] = nn(truncar(ac["irrf_retido"] + ir_calculado, casas=2))
 
-    base_irrf = base_irrf_mes
+    base_irrf = nn(base_irrf_mes)
 
     # ------------------------------------------------------------------
     # ISS
     # ------------------------------------------------------------------
     if perc_iss and float(perc_iss) != 0.0:
-        valor_iss = truncar(bruto * (perc_iss / 100.0), casas=2)
+        valor_iss = nn(truncar(bruto * (perc_iss / 100.0), casas=2))
     else:
         perc_iss  = 0.0
         valor_iss = 0.0
 
-    valor_iss        = limpar_negativo(valor_iss)
-    base_inss_saida  = limpar_negativo(base_inss_saida)
-    inss_frete_sest  = limpar_negativo(inss_frete_sest)
-    inss_frete_senat = limpar_negativo(inss_frete_senat)
-    inss             = limpar_negativo(inss)
-    base_irrf        = limpar_negativo(base_irrf)
-    ir_calculado     = limpar_negativo(ir_calculado)
+    # Camada final de proteção anti-negativo em todos os campos de saída
+    bruto            = nn(bruto)
+    valor_iss        = nn(valor_iss)
+    base_inss_saida  = nn(base_inss_saida)
+    inss_frete_sest  = nn(inss_frete_sest)
+    inss_frete_senat = nn(inss_frete_senat)
+    inss             = nn(inss)
+    pensao_alim      = nn(pensao_alim)
+    outros_desc      = nn(outros_desc)
+    outros_prov      = nn(outros_prov)
+    base_irrf        = nn(base_irrf)
+    ir_calculado     = nn(ir_calculado)
 
     # ------------------------------------------------------------------
     # Montagem dos campos posicionais (total = 266 caracteres)
