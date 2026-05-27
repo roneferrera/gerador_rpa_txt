@@ -11,7 +11,7 @@ import streamlit as st
 # ==============================
 # VERSÃO
 # ==============================
-VERSAO = "V3.6"
+VERSAO = "V3.7"
 
 # ==============================
 # TEMA TR
@@ -90,14 +90,11 @@ def apply_tr_theme():
 # CARREGAMENTO DO MODELO .BGR
 # ==============================
 def carregar_bgr_bytes():
-    """
-    Lê o arquivo bgr_base64.txt (Base64 do .bgr) e devolve os bytes binários.
-    """
     caminho = os.path.join(os.path.dirname(__file__), "bgr_base64.txt")
     try:
         with open(caminho, "r", encoding="utf-8") as f:
             b64 = f.read().strip()
-        b64 = "".join(b64.split())  # remove espaços/quebras
+        b64 = "".join(b64.split())
         return base64.b64decode(b64)
     except Exception as e:
         st.warning(f"⚠ Não foi possível carregar o modelo .bgr: {e}")
@@ -341,21 +338,31 @@ def calcular_irrf_acumulado_generico(
     tabela_ir,
     ded_simpl,
 ):
+    """
+    CORREÇÃO V3.7:
+    Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
+    - Se INSS + dependentes >= simplificada → dedução legal (INSS + dep)
+    - Se INSS + dependentes <  simplificada → dedução simplificada
+    """
     if rendimento_tributavel_acum is None or rendimento_tributavel_acum <= 0:
         return 0.0, 0.0
-    dep_int    = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    red_dep    = truncar(dep_int * VALOR_DEP, casas=2)
-    base_legal = max(truncar(rendimento_tributavel_acum - inss_dedutivel_acum - red_dep, casas=2), 0.0)
-    base_simpl = max(truncar(rendimento_tributavel_acum - ded_simpl, casas=2), 0.0)
-    if ano_ir == 2026:
-        ir_legal = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel_acum)
-        ir_simpl = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel_acum)
+
+    dep_int       = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
+    red_dep       = truncar(dep_int * VALOR_DEP, casas=2)
+    deducao_legal = truncar(inss_dedutivel_acum + red_dep, casas=2)
+
+    # Escolhe a maior dedução
+    if deducao_legal >= ded_simpl:
+        base = max(truncar(rendimento_tributavel_acum - deducao_legal, casas=2), 0.0)
     else:
-        ir_legal = calcular_irrf_tabela(base_legal, tabela_ir)
-        ir_simpl = calcular_irrf_tabela(base_simpl, tabela_ir)
-    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
-        return ir_simpl, base_simpl
-    return ir_legal, base_legal
+        base = max(truncar(rendimento_tributavel_acum - ded_simpl, casas=2), 0.0)
+
+    if ano_ir == 2026:
+        ir = calcular_irrf_2026_por_base(base, rendimento_tributavel_acum)
+    else:
+        ir = calcular_irrf_tabela(base, tabela_ir)
+
+    return ir, base
 
 
 # ==============================
@@ -591,12 +598,15 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     inss_frete_sest  = 0.0
     inss_frete_senat = 0.0
 
+    # ------------------------------------------------------------------
+    # BASE INSS
+    # ------------------------------------------------------------------
     base_inss_registro_original = bruto
     aliquota_inss = 0.11
 
     if esocial_int in (712, 734):
         base_inss_registro_original = truncar(bruto * 0.20, casas=2)
-        aliquota_inss   = 0.20 if esocial_int == 734 else 0.11
+        aliquota_inss    = 0.20 if esocial_int == 734 else 0.11
         inss_frete_sest  = truncar(base_inss_registro_original * 0.015, casas=2)
         inss_frete_senat = truncar(base_inss_registro_original * 0.010, casas=2)
 
@@ -620,18 +630,22 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     base_inss_saida = base_inss_registro_original
 
+    # ------------------------------------------------------------------
     # IRRF acumulado
+    # CORREÇÃO V3.7:
+    # - INSS deduzido para TODOS os eSociais (removida restrição 711/712)
+    # - Critério: maior dedução entre (INSS + dep) e simplificada
+    # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
-    dep_out    = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    deduz_inss = esocial_int in (711, 712)
+    dep_out = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
 
     ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"]      + rendimento_tributavel_registro, casas=2)
     ac["inss_dedutivel_irrf"] = truncar(ac["inss_dedutivel_irrf"] + inss,                           casas=2)
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
     rendimento_tributavel_acum = ac["rend_trib_irrf"]
-    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"] if deduz_inss else 0.0
+    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"]  # sempre deduz INSS
     dependentes_acum           = ac["dependentes"]
 
     _ano = ano_ir if ano_ir in (2025, 2026) else 2025
@@ -656,7 +670,9 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     base_irrf = base_irrf_mes
 
+    # ------------------------------------------------------------------
     # ISS
+    # ------------------------------------------------------------------
     if perc_iss and float(perc_iss) != 0.0:
         valor_iss = truncar(bruto * (perc_iss / 100.0), casas=2)
     else:
@@ -671,6 +687,9 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     base_irrf        = limpar_negativo(base_irrf)
     ir_calculado     = limpar_negativo(ir_calculado)
 
+    # ------------------------------------------------------------------
+    # Montagem dos campos posicionais (total = 266 caracteres)
+    # ------------------------------------------------------------------
     try:
         campo_codigo_empresa   = fmt_int(codigo_empresa,  7)
         campo_codigo_contrib   = fmt_int(cod_contrib,    10)
@@ -694,27 +713,27 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         campo_valor_ir         = fmt_num(ir_calculado,     8, casas=2, permitir_negativo=False)
 
         registro = (
-            campo_codigo_empresa   +
-            campo_codigo_contrib   +
-            campo_competencia      +
-            campo_desc_atividade   +
-            campo_num_rpa          +
-            campo_rendimento_bruto +
-            campo_percentual_iss   +
-            campo_valor_iss        +
-            campo_data_venc_iss    +
-            campo_base_inss        +
-            campo_inss_frete_sest  +
-            campo_inss_frete_senat +
-            campo_valor_inss       +
-            campo_pensao_alim      +
-            campo_outros_desc      +
-            campo_outros_prov      +
-            campo_data_pagto       +
-            campo_base_irrf        +
-            campo_qtd_dep_ir       +
-            campo_valor_ir
-        )
+            campo_codigo_empresa   +   #   7
+            campo_codigo_contrib   +   #  10
+            campo_competencia      +   #   6
+            campo_desc_atividade   +   # 100
+            campo_num_rpa          +   #  10
+            campo_rendimento_bruto +   #  11
+            campo_percentual_iss   +   #   5
+            campo_valor_iss        +   #  11
+            campo_data_venc_iss    +   #   8
+            campo_base_inss        +   #  11
+            campo_inss_frete_sest  +   #   8
+            campo_inss_frete_senat +   #   8
+            campo_valor_inss       +   #   8
+            campo_pensao_alim      +   #  11
+            campo_outros_desc      +   #  11
+            campo_outros_prov      +   #  11
+            campo_data_pagto       +   #   8
+            campo_base_irrf        +   #  11
+            campo_qtd_dep_ir       +   #   3
+            campo_valor_ir             #   8
+        )                              # = 266
 
     except Exception as e:
         log.append(f"ERRO ao montar registro do contrib {cod_contrib}: {e}")
@@ -788,7 +807,6 @@ def main():
     )
     apply_tr_theme()
 
-    # ----------- Cabeçalho -----------
     st.markdown(
         f"""
         <div style="background:#444444; padding:24px 28px 18px 28px; border-radius:8px;
@@ -804,7 +822,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ----------- Sidebar -----------
     with st.sidebar:
         st.markdown("### 📥 Modelo de Relatório")
         st.markdown(
@@ -830,7 +847,6 @@ def main():
         st.markdown("**Thomson Reuters**")
         st.markdown("**Domínio Sistemas**")
 
-    # ----------- Instruções de uso -----------
     with st.expander("📖 **Instruções de Uso** — clique para expandir", expanded=False):
         st.markdown(
             """
@@ -885,7 +901,6 @@ def main():
 
     st.markdown("---")
 
-    # ----------- Estado da sessão -----------
     if "log" not in st.session_state:
         st.session_state.log = [f"Aplicação pronta. Versão: {VERSAO}"]
     if "txt_gerado" not in st.session_state:
@@ -893,7 +908,6 @@ def main():
     if "nome_arquivo" not in st.session_state:
         st.session_state.nome_arquivo = "saida.txt"
 
-    # ----------- Upload -----------
     arquivo = st.file_uploader(
         "Excel de origem",
         type=["xlsx", "xls"],
@@ -945,7 +959,6 @@ def main():
             type="primary",
         )
 
-    # ----------- Log -----------
     st.markdown("**Log de processamento**")
     log_texto = "\n".join(st.session_state.log)
     tem_erro = any(str(l).startswith("ERRO") for l in st.session_state.log)
