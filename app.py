@@ -11,7 +11,7 @@ import streamlit as st
 # ==============================
 # VERSÃO
 # ==============================
-VERSAO = "V3.8"
+VERSAO = "V3.9"
 
 # ==============================
 # TEMA TR
@@ -344,7 +344,7 @@ def calcular_irrf_acumulado_generico(
     ded_simpl,
 ):
     """
-    V3.8 — Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
+    V3.9 — Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
     Todos os valores intermediários e de saída são garantidos >= 0.
     """
     if rendimento_tributavel_acum is None or rendimento_tributavel_acum <= 0:
@@ -624,7 +624,8 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     base_limitada_nova          = min(base_empresa_nova,     saldo_teto)
     base_inss_registro_limitada = nn(truncar(base_limitada_nova - base_limitada_anterior, casas=2))
 
-    inss = nn(truncar(base_inss_registro_limitada * aliquota_inss, casas=2))
+    # ✅ V3.9 — round() em vez de truncar() para evitar perda de centavo no INSS
+    inss = nn(round(base_inss_registro_limitada * aliquota_inss, 2))
 
     ac["base_inss_empresa"]   = nn(base_empresa_nova)
     ac["inss_retido_empresa"] = nn(truncar(ac["inss_retido_empresa"] + inss, casas=2))
@@ -633,7 +634,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     # ------------------------------------------------------------------
     # IRRF acumulado
-    # V3.8: INSS sempre deduzido; critério = maior dedução
+    # V3.9: INSS sempre deduzido; critério = maior dedução
     # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
@@ -670,11 +671,11 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     base_irrf = nn(base_irrf_mes)
 
     # ------------------------------------------------------------------
-    # V3.8 — Categoria 701: campo base_irrf no TXT = rendimento bruto.
+    # V3.8 — Categoria 701: campo base_irrf no TXT = bruto + INSS retido.
     # O cálculo e retenção do IRRF NÃO são alterados.
     # ------------------------------------------------------------------
     if esocial_int == 701:
-        base_irrf = nn(bruto)
+        base_irrf = nn(truncar(bruto + inss, casas=2))
 
     # ------------------------------------------------------------------
     # ISS
@@ -902,7 +903,7 @@ def main():
                 <li>O cálculo do INSS respeita o <b>teto previdenciário</b> acumulado no mês.</li>
                 <li>Categorias e-Social <b>711/731/734</b> aplicam base de IR de 60%; <b>712</b> aplica 10%.</li>
                 <li>Para fretes (e-Social <b>712</b> e <b>734</b>), a base de INSS é 20% do bruto, com SEST/SENAT.</li>
-                <li>Categoria e-Social <b>701</b>: base IRRF no TXT igual ao rendimento bruto.</li>
+                <li>Categoria e-Social <b>701</b>: base IRRF no TXT = rendimento bruto + valor INSS retido.</li>
                 <li>Em caso de erro, verifique o <b>Log de processamento</b> ao final da página.</li>
             </ul>
 
