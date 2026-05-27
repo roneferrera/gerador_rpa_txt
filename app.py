@@ -11,7 +11,7 @@ import streamlit as st
 # ==============================
 # VERSÃO
 # ==============================
-VERSAO = "V3.7"
+VERSAO = "V3.8"
 
 # ==============================
 # TEMA TR
@@ -344,7 +344,7 @@ def calcular_irrf_acumulado_generico(
     ded_simpl,
 ):
     """
-    V3.7 — Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
+    V3.8 — Usa a MAIOR dedução entre (INSS + dependentes) e simplificada.
     Todos os valores intermediários e de saída são garantidos >= 0.
     """
     if rendimento_tributavel_acum is None or rendimento_tributavel_acum <= 0:
@@ -633,7 +633,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     # ------------------------------------------------------------------
     # IRRF acumulado
-    # V3.7: INSS sempre deduzido; critério = maior dedução
+    # V3.8: INSS sempre deduzido; critério = maior dedução
     # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
@@ -644,7 +644,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
     rendimento_tributavel_acum = nn(ac["rend_trib_irrf"])
-    inss_dedutivel_acum        = nn(ac["inss_dedutivel_irrf"])  # sempre deduz INSS
+    inss_dedutivel_acum        = nn(ac["inss_dedutivel_irrf"])
     dependentes_acum           = ac["dependentes"]
 
     _ano = ano_ir if ano_ir in (2025, 2026) else 2025
@@ -668,6 +668,13 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     ac["irrf_retido"] = nn(truncar(ac["irrf_retido"] + ir_calculado, casas=2))
 
     base_irrf = nn(base_irrf_mes)
+
+    # ------------------------------------------------------------------
+    # V3.8 — Categoria 701: campo base_irrf no TXT = rendimento bruto.
+    # O cálculo e retenção do IRRF NÃO são alterados.
+    # ------------------------------------------------------------------
+    if esocial_int == 701:
+        base_irrf = nn(bruto)
 
     # ------------------------------------------------------------------
     # ISS
@@ -895,6 +902,7 @@ def main():
                 <li>O cálculo do INSS respeita o <b>teto previdenciário</b> acumulado no mês.</li>
                 <li>Categorias e-Social <b>711/731/734</b> aplicam base de IR de 60%; <b>712</b> aplica 10%.</li>
                 <li>Para fretes (e-Social <b>712</b> e <b>734</b>), a base de INSS é 20% do bruto, com SEST/SENAT.</li>
+                <li>Categoria e-Social <b>701</b>: base IRRF no TXT igual ao rendimento bruto.</li>
                 <li>Em caso de erro, verifique o <b>Log de processamento</b> ao final da página.</li>
             </ul>
 
