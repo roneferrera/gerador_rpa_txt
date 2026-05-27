@@ -9,7 +9,7 @@ import streamlit as st
 # ==============================
 # VERSÃO
 # ==============================
-VERSAO = "V3.5"
+VERSAO = "V3.6"
 
 # ==============================
 # TEMA TR
@@ -623,13 +623,13 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     chave = chave_acumulacao_mes(meta, reg, data_pagto_dt)
     if chave not in acum_mes:
         acum_mes[chave] = {
-            "base_inss_empresa":  0.0,
+            "base_inss_empresa":   0.0,
             "inss_retido_empresa": 0.0,
-            "outras_fontes_base": 0.0,
-            "rend_trib_irrf":     0.0,
+            "outras_fontes_base":  0.0,
+            "rend_trib_irrf":      0.0,
             "inss_dedutivel_irrf": 0.0,
-            "irrf_retido":        0.0,
-            "dependentes":        0,
+            "irrf_retido":         0.0,
+            "dependentes":         0,
         }
 
     ac = acum_mes[chave]
@@ -653,20 +653,19 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         inss_frete_sest  = truncar(base_inss_registro_original * 0.015, casas=2)
         inss_frete_senat = truncar(base_inss_registro_original * 0.010, casas=2)
 
-    teto_inss         = teto_inss_por_data_pagto(data_pagto_dt)
+    teto_inss          = teto_inss_por_data_pagto(data_pagto_dt)
     outras_fontes_base = max(truncar(ac.get("outras_fontes_base", 0.0), casas=2), 0.0)
     saldo_teto         = max(truncar(teto_inss - outras_fontes_base, casas=2), 0.0)
 
     base_empresa_anterior = truncar(ac["base_inss_empresa"], casas=2)
     base_empresa_nova     = truncar(base_empresa_anterior + base_inss_registro_original, casas=2)
 
-    base_limitada_anterior    = min(base_empresa_anterior, saldo_teto)
-    base_limitada_nova        = min(base_empresa_nova,     saldo_teto)
+    base_limitada_anterior      = min(base_empresa_anterior, saldo_teto)
+    base_limitada_nova          = min(base_empresa_nova,     saldo_teto)
     base_inss_registro_limitada = max(
         truncar(base_limitada_nova - base_limitada_anterior, casas=2), 0.0
     )
 
-    # Cálculo do valor do INSS usa a base LIMITADA ao teto (lógica intacta)
     inss = max(truncar(base_inss_registro_limitada * aliquota_inss, casas=2), 0.0)
 
     ac["base_inss_empresa"]   = base_empresa_nova
@@ -677,18 +676,18 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     # ------------------------------------------------------------------
     # IRRF acumulado
+    # CORREÇÃO V3.6: INSS deduzido da base do IRRF para todos os eSociais
     # ------------------------------------------------------------------
     rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
 
-    dep_out    = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    deduz_inss = esocial_int in (711, 712)
+    dep_out = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
 
     ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"]      + rendimento_tributavel_registro, casas=2)
     ac["inss_dedutivel_irrf"] = truncar(ac["inss_dedutivel_irrf"] + inss,                           casas=2)
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
     rendimento_tributavel_acum = ac["rend_trib_irrf"]
-    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"] if deduz_inss else 0.0
+    inss_dedutivel_acum        = ac["inss_dedutivel_irrf"]   # ← CORREÇÃO: sempre deduz INSS
     dependentes_acum           = ac["dependentes"]
 
     _ano = ano_ir if ano_ir in (2025, 2026) else 2025
@@ -722,7 +721,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     # Garantir não-negativos na saída
     valor_iss        = limpar_negativo(valor_iss)
-    base_inss_saida  = limpar_negativo(base_inss_saida)   # bruto original (ou 20% frete)
+    base_inss_saida  = limpar_negativo(base_inss_saida)
     inss_frete_sest  = limpar_negativo(inss_frete_sest)
     inss_frete_senat = limpar_negativo(inss_frete_senat)
     inss             = limpar_negativo(inss)
@@ -735,14 +734,13 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
     try:
         campo_codigo_empresa   = fmt_int(codigo_empresa,  7)
         campo_codigo_contrib   = fmt_int(cod_contrib,    10)
-        campo_competencia      = competencia_str                                          #  6
+        campo_competencia      = competencia_str
         campo_desc_atividade   = fmt_str(atividade,     100)
         campo_num_rpa          = fmt_int(rpa_num,        10)
         campo_rendimento_bruto = fmt_num(bruto,          11, casas=2, permitir_negativo=False)
         campo_percentual_iss   = fmt_num(perc_iss,        5, casas=2, permitir_negativo=False)
         campo_valor_iss        = fmt_num(valor_iss,      11, casas=2, permitir_negativo=False)
-        campo_data_venc_iss    = data_venc_iss                                            #  8
-        # ← base_inss_saida = rendimento bruto original (sem limitação de teto)
+        campo_data_venc_iss    = data_venc_iss
         campo_base_inss        = fmt_num(base_inss_saida, 11, casas=2, permitir_negativo=False)
         campo_inss_frete_sest  = fmt_num(inss_frete_sest,  8, casas=2, permitir_negativo=False)
         campo_inss_frete_senat = fmt_num(inss_frete_senat, 8, casas=2, permitir_negativo=False)
@@ -750,7 +748,7 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         campo_pensao_alim      = fmt_num(pensao_alim,     11, casas=2, permitir_negativo=False)
         campo_outros_desc      = fmt_num(outros_desc,     11, casas=2, permitir_negativo=False)
         campo_outros_prov      = fmt_num(outros_prov,     11, casas=2, permitir_negativo=False)
-        campo_data_pagto       = data_pagto_str                                           #  8
+        campo_data_pagto       = data_pagto_str
         campo_base_irrf        = fmt_num(base_irrf,       11, casas=2, permitir_negativo=False)
         campo_qtd_dep_ir       = fmt_int(dep_out,          3)
         campo_valor_ir         = fmt_num(ir_calculado,     8, casas=2, permitir_negativo=False)
