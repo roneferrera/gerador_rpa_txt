@@ -856,14 +856,13 @@ def main():
 
             <h4>🔹 Passo 4 — Gerar o arquivo TXT</h4>
             <ol>
-                <li>Nesta página, clique em <b>Browse files</b> e selecione o Excel exportado.</li>
+                <li>Nesta página, realize o <b>Upload do Arquivo</b> e selecione o Excel exportado.</li>
                 <li>Clique em <b>▶ Gerar arquivo TXT</b>.</li>
                 <li>Aguarde o processamento e clique em <b>⬇ Baixar arquivo TXT</b>.</li>
             </ol>
 
             <h4>🔹 Passo 5 — Importar o TXT de volta no Domínio</h4>
-            <p>Use o módulo de importação de lançamentos do Domínio para carregar o
-            arquivo TXT gerado (layout posicional de <b>266 caracteres</b>).</p>
+            <p>No módulo Folha, em Utilitários > Importação > de Arquivo Texto > De RPA.</p>
 
             <hr>
 
