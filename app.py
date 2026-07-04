@@ -1,6 +1,8 @@
 import math
 import re
 import io
+import os
+import base64
 import pandas as pd
 from datetime import datetime, date
 import traceback
@@ -873,6 +875,31 @@ def gerar_txt_streamlit(arquivo_bytes, log):
 
 
 # ==============================
+# UTILITÁRIO — lê bgr_base64.txt e devolve bytes do arquivo BGR
+# O arquivo bgr_base64.txt deve estar na mesma pasta do app.py
+# e conter o conteúdo Base64 puro (sem prefixo data:image/...)
+# ==============================
+def carregar_bgr_bytes():
+    """
+    Lê bgr_base64.txt e retorna os bytes decodificados prontos para download.
+    Retorna (bytes, None) em caso de sucesso ou (None, mensagem_erro).
+    """
+    caminho = os.path.join(os.path.dirname(__file__), "bgr_base64.txt")
+    if not os.path.exists(caminho):
+        return None, "Arquivo bgr_base64.txt não encontrado na pasta do app."
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            conteudo = f.read().strip()
+        # Remove prefixo data:... caso exista
+        if "," in conteudo and conteudo.startswith("data:"):
+            conteudo = conteudo.split(",", 1)[1]
+        dados = base64.b64decode(conteudo)
+        return dados, None
+    except Exception as e:
+        return None, f"Erro ao decodificar bgr_base64.txt: {e}"
+
+
+# ==============================
 # CSS — Tema Thomson Reuters / Domínio Sistemas (escuro)
 # ==============================
 TR_DARK_CSS = """
@@ -890,7 +917,6 @@ TR_DARK_CSS = """
    Aviso            : #D29922
 ──────────────────────────────────────────────────────── */
 
-/* Fundo global */
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"],
 .main {
@@ -902,20 +928,18 @@ TR_DARK_CSS = """
     border-right: 1px solid #21262D !important;
 }
 
-/* Texto base */
 html, body, [class*="css"], p, span, label, div {
     color: #E6EDF3 !important;
     font-family: 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
 }
 
-/* Títulos */
 h1, h2, h3, h4, h5, h6 {
     color: #E6EDF3 !important;
     font-weight: 600 !important;
     letter-spacing: -0.02em !important;
 }
 
-/* ── Botão primário (Gerar) ─────────────────────────── */
+/* Botão primário */
 [data-testid="stButton"] button[kind="primary"],
 button[kind="primary"] {
     background: linear-gradient(135deg, #FF6200 0%, #E05500 100%) !important;
@@ -940,10 +964,9 @@ button[kind="primary"] {
     background: #2D333B !important;
     color: #484F58 !important;
     box-shadow: none !important;
-    cursor: not-allowed !important;
 }
 
-/* ── Botão secundário (Limpar / Download) ──────────── */
+/* Botão secundário */
 [data-testid="stButton"] button[kind="secondary"],
 button[kind="secondary"] {
     background-color: #21262D !important;
@@ -952,14 +975,14 @@ button[kind="secondary"] {
     border-radius: 6px !important;
     font-weight: 500 !important;
     font-size: 14px !important;
-    transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    transition: background-color 0.2s ease !important;
 }
 [data-testid="stButton"] button[kind="secondary"]:hover {
     background-color: #2D333B !important;
     border-color: #484F58 !important;
 }
 
-/* ── Download button ────────────────────────────────── */
+/* Download button */
 [data-testid="stDownloadButton"] button {
     background: linear-gradient(135deg, #006AFF 0%, #0054CC 100%) !important;
     color: #FFFFFF !important;
@@ -974,7 +997,7 @@ button[kind="secondary"] {
     opacity: 0.88 !important;
 }
 
-/* ── File uploader ──────────────────────────────────── */
+/* File uploader */
 [data-testid="stFileUploader"] {
     background-color: #161B22 !important;
     border: 1.5px dashed #30363D !important;
@@ -985,31 +1008,13 @@ button[kind="secondary"] {
 [data-testid="stFileUploader"]:hover {
     border-color: #FF6200 !important;
 }
-[data-testid="stFileUploaderDropzoneInstructions"] div,
-[data-testid="stFileUploaderDropzone"] label,
-[data-testid="stFileUploaderDropzone"] span {
-    color: #8B949E !important;
-}
 
-/* ── Alertas / st.success ───────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    border-left-width: 4px !important;
-}
-[data-testid="stAlert"][data-baseweb="notification"][kind="positive"],
-div[data-testid="stAlert"].st-emotion-cache-1xarl3l {
-    background-color: #0D2818 !important;
-    border-left-color: #3FB950 !important;
-    color: #3FB950 !important;
-}
-
-/* ── Scrollbar ──────────────────────────────────────── */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #161B22; }
 ::-webkit-scrollbar-thumb { background: #30363D; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #484F58; }
 
-/* ── Divisor ────────────────────────────────────────── */
 hr {
     border-color: #21262D !important;
     margin: 20px 0 !important;
@@ -1019,19 +1024,293 @@ hr {
 
 
 # ==============================
+# SIDEBAR — Painel BGR
+# ==============================
+def render_sidebar():
+    with st.sidebar:
+
+        # ── Logo / Identidade ────────────────────────────
+        st.markdown(
+            """
+            <div style="
+                padding: 20px 4px 16px 4px;
+                border-bottom: 1px solid #21262D;
+                margin-bottom: 20px;
+            ">
+                <div style="
+                    font-size: 10px;
+                    font-weight: 800;
+                    letter-spacing: 0.18em;
+                    color: #FF6200;
+                    text-transform: uppercase;
+                    margin-bottom: 4px;
+                ">Thomson Reuters</div>
+                <div style="
+                    font-size: 15px;
+                    font-weight: 700;
+                    color: #E6EDF3;
+                    letter-spacing: -0.01em;
+                ">Domínio Sistemas</div>
+                <div style="
+                    font-size: 11px;
+                    color: #8B949E;
+                    margin-top: 2px;
+                ">Gerador RPA · Utilitários</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── Card BGR ─────────────────────────────────────
+        st.markdown(
+            """
+            <div style="
+                background: #161B22;
+                border: 1px solid #21262D;
+                border-top: 3px solid #006AFF;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 16px;
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                ">
+                    <span style="font-size:20px;">🖼️</span>
+                    <div>
+                        <div style="
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: #E6EDF3;
+                        ">Arquivo BGR</div>
+                        <div style="
+                            font-size: 11px;
+                            color: #8B949E;
+                        ">Background · Domínio Sistemas</div>
+                    </div>
+                </div>
+                <div style="
+                    background: #0D1117;
+                    border: 1px solid #21262D;
+                    border-radius: 6px;
+                    padding: 10px 12px;
+                    margin-bottom: 12px;
+                    font-size: 12px;
+                    color: #8B949E;
+                    line-height: 1.6;
+                ">
+                    Instale o plano de fundo personalizado<br>
+                    no <strong style="color:#E6EDF3;">Domínio Sistemas</strong>.<br><br>
+                    <span style="color:#D29922;">⚙</span>
+                    <span style="color:#8B949E;">
+                        Menu <strong style="color:#C9D1D9;">Utilitários → Personalizar → BGR</strong>
+                    </span>
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Carrega e exibe botão de download do BGR
+        bgr_bytes, bgr_erro = carregar_bgr_bytes()
+
+        if bgr_bytes is not None:
+            st.download_button(
+                label="⬇  Baixar bgr_base64.txt",
+                data=bgr_bytes,
+                file_name="bgr_base64.txt",
+                mime="text/plain",
+                use_container_width=True,
+                help="Clique para baixar o arquivo de background do Domínio Sistemas",
+            )
+            st.markdown(
+                f"""
+                <div style="
+                    margin-top: 8px;
+                    font-size: 11px;
+                    color: #3FB950;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                ">
+                    <span>✔</span>
+                    <span>Arquivo disponível · {len(bgr_bytes):,} bytes</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style="
+                    background: #1A0D0D;
+                    border: 1px solid #DA3633;
+                    border-radius: 6px;
+                    padding: 10px 12px;
+                    font-size: 12px;
+                    color: #F85149;
+                    line-height: 1.5;
+                ">
+                    <strong>⚠ BGR não encontrado</strong><br>
+                    <span style="color:#8B949E;">{bgr_erro}</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # Fecha o card BGR
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Instruções de instalação ──────────────────────
+        st.markdown(
+            """
+            <div style="
+                background: #161B22;
+                border: 1px solid #21262D;
+                border-radius: 8px;
+                padding: 14px 16px;
+                margin-bottom: 16px;
+            ">
+                <div style="
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: 0.1em;
+                    color: #8B949E;
+                    text-transform: uppercase;
+                    margin-bottom: 10px;
+                ">📋 Como instalar o BGR</div>
+
+                <div style="display:flex; gap:10px; margin-bottom:8px; align-items:flex-start;">
+                    <div style="
+                        min-width: 20px; height: 20px;
+                        background: #FF6200;
+                        border-radius: 50%;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #fff;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    ">1</div>
+                    <div style="font-size: 12px; color: #C9D1D9; line-height: 1.5;">
+                        Baixe o arquivo <strong style="color:#E6EDF3;">bgr_base64.txt</strong> acima
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-bottom:8px; align-items:flex-start;">
+                    <div style="
+                        min-width: 20px; height: 20px;
+                        background: #FF6200;
+                        border-radius: 50%;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #fff;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    ">2</div>
+                    <div style="font-size: 12px; color: #C9D1D9; line-height: 1.5;">
+                        Abra o <strong style="color:#E6EDF3;">Domínio Sistemas</strong>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-bottom:8px; align-items:flex-start;">
+                    <div style="
+                        min-width: 20px; height: 20px;
+                        background: #FF6200;
+                        border-radius: 50%;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #fff;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    ">3</div>
+                    <div style="font-size: 12px; color: #C9D1D9; line-height: 1.5;">
+                        Acesse <strong style="color:#E6EDF3;">Utilitários → Personalizar</strong>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-bottom:8px; align-items:flex-start;">
+                    <div style="
+                        min-width: 20px; height: 20px;
+                        background: #FF6200;
+                        border-radius: 50%;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #fff;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    ">4</div>
+                    <div style="font-size: 12px; color: #C9D1D9; line-height: 1.5;">
+                        Importe o arquivo <strong style="color:#E6EDF3;">.txt</strong> na aba <strong style="color:#E6EDF3;">BGR</strong>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <div style="
+                        min-width: 20px; height: 20px;
+                        background: #3FB950;
+                        border-radius: 50%;
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #fff;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    ">✓</div>
+                    <div style="font-size: 12px; color: #3FB950; line-height: 1.5;">
+                        Reinicie o sistema para aplicar
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── Rodapé da sidebar ─────────────────────────────
+        st.markdown(
+            f"""
+            <div style="
+                padding-top: 16px;
+                border-top: 1px solid #21262D;
+                font-size: 11px;
+                color: #484F58;
+                text-align: center;
+                line-height: 1.6;
+            ">
+                Gerador RPA · {VERSAO}<br>
+                <span style="color:#FF6200; font-weight:700;">Thomson Reuters</span>
+                · Domínio Sistemas
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+# ==============================
 # INTERFACE STREAMLIT — Tema TR/Domínio Escuro
 # ==============================
 def main():
     st.set_page_config(
         page_title=f"Gerador TXT — RPA | {VERSAO}",
         page_icon="📄",
-        layout="centered",
+        layout="wide",   # wide para acomodar a sidebar
     )
 
-    # Injeta CSS do tema
     st.markdown(TR_DARK_CSS, unsafe_allow_html=True)
 
-    # ── Header ──────────────────────────────────────────
+    # Renderiza sidebar com painel BGR
+    render_sidebar()
+
+    # ── Header principal ─────────────────────────────────
     st.markdown(
         f"""
         <div style="
@@ -1078,7 +1357,9 @@ def main():
                 font-size:13.5px;
                 color:#8B949E;
                 line-height:1.5;
-            ">Importe o Excel de origem e clique em <strong style="color:#E6EDF3;">Gerar arquivo TXT</strong> para processar os lançamentos RPA.</p>
+            ">Importe o Excel de origem e clique em
+            <strong style="color:#E6EDF3;">Gerar arquivo TXT</strong>
+            para processar os lançamentos RPA.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1162,10 +1443,8 @@ def main():
             conteudo = "\n".join(linhas) + "\n"
             st.session_state.txt_gerado = conteudo.encode("latin-1", errors="replace")
 
-            # Captura metadados para o painel de resumo
             try:
-                import io as _io
-                _buf = _io.BytesIO(arquivo_bytes)
+                _buf = io.BytesIO(arquivo_bytes)
                 _meta_tmp = ler_planilha_rpa(_buf, [])
                 if _meta_tmp:
                     st.session_state.meta_info = {
@@ -1182,7 +1461,6 @@ def main():
     # ── Painel de resultado ──────────────────────────────
     if st.session_state.txt_gerado is not None:
 
-        # Cards de resumo
         if st.session_state.meta_info:
             m = st.session_state.meta_info
             comp_fmt = (
@@ -1229,7 +1507,6 @@ def main():
                 unsafe_allow_html=True,
             )
 
-        # Alerta de sucesso customizado
         st.markdown(
             """
             <div style="
@@ -1264,26 +1541,20 @@ def main():
     # ── Log de processamento ─────────────────────────────
     st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
 
-    tem_erro = any(str(l).startswith("ERRO") for l in st.session_state.log)
+    tem_erro  = any(str(l).startswith("ERRO")  for l in st.session_state.log)
     tem_aviso = any(str(l).startswith("Aviso") for l in st.session_state.log)
 
     if tem_erro:
-        cor_accent = "#F85149"
-        cor_borda  = "#DA3633"
-        cor_fundo  = "#1A0D0D"
-        icone_log  = "🔴"
+        cor_accent = "#F85149"; cor_borda = "#DA3633"
+        cor_fundo  = "#1A0D0D"; icone_log = "🔴"
         label_log  = "Log de processamento — Erros detectados"
     elif tem_aviso:
-        cor_accent = "#D29922"
-        cor_borda  = "#9E6A03"
-        cor_fundo  = "#1A1500"
-        icone_log  = "🟡"
+        cor_accent = "#D29922"; cor_borda = "#9E6A03"
+        cor_fundo  = "#1A1500"; icone_log = "🟡"
         label_log  = "Log de processamento — Avisos"
     else:
-        cor_accent = "#3FB950"
-        cor_borda  = "#238636"
-        cor_fundo  = "#0D1A10"
-        icone_log  = "🟢"
+        cor_accent = "#3FB950"; cor_borda = "#238636"
+        cor_fundo  = "#0D1A10"; icone_log = "🟢"
         label_log  = "Log de processamento"
 
     st.markdown(
@@ -1340,12 +1611,8 @@ def main():
             <span style="font-size:11px;color:#484F58;">
                 Thomson Reuters · Domínio Sistemas · Gerador RPA
             </span>
-            <span style="
-                font-size:11px;
-                font-weight:700;
-                letter-spacing:0.08em;
-                color:#FF6200;
-            ">{VERSAO}</span>
+            <span style="font-size:11px;font-weight:700;
+                         letter-spacing:0.08em;color:#FF6200;">{VERSAO}</span>
         </div>
         """,
         unsafe_allow_html=True,
