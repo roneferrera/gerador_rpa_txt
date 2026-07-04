@@ -33,12 +33,19 @@ TABELA_IR_ATE_042025 = [
     (None,    0.275, 896.00),
 ]
 
-VALOR_DEP = 189.59
-DATA_CORTE_TABELA_IR = date(2025, 5, 1)
+VALOR_DEP                 = 189.59
+DATA_CORTE_TABELA_IR      = date(2025, 5, 1)
 DEDUCAO_SIMPLIFICADA_2026 = 607.20
-TETO_INSS_2025 = 8157.41
-TETO_INSS_2026 = 8475.55
+TETO_INSS_2025            = 8157.41
+TETO_INSS_2026            = 8475.55
 
+# Nome do arquivo BGR para download
+NOME_ARQUIVO_BGR = "Relação de Rendimentos - RPA.bgr"
+
+
+# ──────────────────────────────────────────────────────────
+# FUNÇÕES AUXILIARES
+# ──────────────────────────────────────────────────────────
 
 def excel_date_to_datetime(value):
     if value is None:
@@ -233,30 +240,134 @@ def calcular_irrf_2026_por_base(BC, rendimento_tributavel):
     return max(truncar(ir_tabela - min(red, ir_tabela), casas=2), 0.0)
 
 
+def calcular_irrf_mais_vantajoso_base100(base_bruta, dependentes, tabela, ded_simpl):
+    if base_bruta is None or base_bruta <= 0:
+        return 0.0, 0.0
+    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    base_geral = truncar(base_bruta - red_dep, casas=2)
+    ir_geral   = calcular_irrf_tabela(base_geral, tabela)
+    base_simpl = truncar(base_bruta - ded_simpl, casas=2)
+    ir_simpl   = calcular_irrf_tabela(base_simpl, tabela)
+    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
+        return ir_simpl, base_simpl
+    return ir_geral, base_geral
+
+
+def calcular_irrf_base60_legal(bruto, inss, dependentes, tabela):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base60  = truncar(bruto * 0.60, casas=2)
+    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    base    = truncar(base60 - inss - red_dep, casas=2)
+    return calcular_irrf_tabela(base, tabela), base
+
+
+def calcular_irrf_base60_mais_vantajoso_2025(bruto, inss, dependentes, tabela, ded_simpl):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base60              = truncar(bruto * 0.60, casas=2)
+    ir_geral, base_geral = calcular_irrf_base60_legal(bruto, inss, dependentes, tabela)
+    base_simpl           = truncar(base60 - ded_simpl, casas=2)
+    ir_simpl             = calcular_irrf_tabela(base_simpl, tabela)
+    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
+        return ir_simpl, base_simpl
+    return ir_geral, base_geral
+
+
+def calcular_irrf_base10_legal(bruto, inss, dependentes, tabela):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base10  = truncar(bruto * 0.10, casas=2)
+    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    base    = truncar(base10 - inss - red_dep, casas=2)
+    return calcular_irrf_tabela(base, tabela), base
+
+
+def calcular_irrf_base10_mais_vantajoso_2025(bruto, inss, dependentes, tabela, ded_simpl):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base10               = truncar(bruto * 0.10, casas=2)
+    ir_geral, base_geral = calcular_irrf_base10_legal(bruto, inss, dependentes, tabela)
+    base_simpl           = truncar(base10 - ded_simpl, casas=2)
+    ir_simpl             = calcular_irrf_tabela(base_simpl, tabela)
+    if (ir_simpl < ir_geral) or (ir_simpl == ir_geral and base_simpl <= base_geral):
+        return ir_simpl, base_simpl
+    return ir_geral, base_geral
+
+
+def calcular_irrf_base60_mais_vantajoso_2026(bruto, inss, dependentes, ded_simpl, rendimento_tributavel):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base60  = truncar(bruto * 0.60, casas=2)
+    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    base_legal = truncar(base60 - inss - red_dep, casas=2)
+    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
+    base_simpl = truncar(base60 - ded_simpl, casas=2)
+    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
+    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
+        return ir_simpl, base_simpl
+    return ir_legal, base_legal
+
+
+def calcular_irrf_base10_mais_vantajoso_2026(bruto, inss, dependentes, ded_simpl, rendimento_tributavel):
+    if bruto is None or bruto <= 0:
+        return 0.0, 0.0
+    base10  = truncar(bruto * 0.10, casas=2)
+    dep_int = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    base_legal = truncar(base10 - inss - red_dep, casas=2)
+    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
+    base_simpl = truncar(base10 - ded_simpl, casas=2)
+    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
+    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
+        return ir_simpl, base_simpl
+    return ir_legal, base_legal
+
+
+def calcular_irrf_mais_vantajoso_2026_base100(base_bruta, dependentes, rendimento_tributavel, ded_simpl):
+    if base_bruta is None or base_bruta <= 0:
+        return 0.0, 0.0, "nenhum"
+    dep_int    = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    red_dep    = truncar(dep_int * VALOR_DEP, casas=2)
+    base_legal = truncar(base_bruta - red_dep, casas=2)
+    ir_legal   = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel)
+    base_simpl = truncar(base_bruta - ded_simpl, casas=2)
+    ir_simpl   = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel)
+    if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
+        return ir_simpl, base_simpl, "simplificada"
+    return ir_legal, base_legal, "legal"
+
+
 def calcular_irrf_acumulado_generico(
     rendimento_tributavel_acum, inss_dedutivel_acum,
     dependentes, ano_ir, tabela_ir, ded_simpl
 ):
     if rendimento_tributavel_acum is None or rendimento_tributavel_acum <= 0:
         return 0.0, 0.0
-    dep_int = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    red_dep = truncar(dep_int * VALOR_DEP, casas=2)
+    dep_int    = 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes)
+    dep_int    = max(dep_int, 0)
+    red_dep    = truncar(dep_int * VALOR_DEP, casas=2)
     base_legal = max(truncar(rendimento_tributavel_acum - inss_dedutivel_acum - red_dep, casas=2), 0.0)
     base_simpl = max(truncar(rendimento_tributavel_acum - ded_simpl, casas=2), 0.0)
     if ano_ir == 2026:
         ir_legal = calcular_irrf_2026_por_base(base_legal, rendimento_tributavel_acum)
-        ir_simpl  = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel_acum)
+        ir_simpl = calcular_irrf_2026_por_base(base_simpl, rendimento_tributavel_acum)
     else:
         ir_legal = calcular_irrf_tabela(base_legal, tabela_ir)
-        ir_simpl  = calcular_irrf_tabela(base_simpl, tabela_ir)
+        ir_simpl = calcular_irrf_tabela(base_simpl, tabela_ir)
     if (ir_simpl < ir_legal) or (ir_simpl == ir_legal and base_simpl <= base_legal):
         return ir_simpl, base_simpl
     return ir_legal, base_legal
 
 
-# ==============================
+# ──────────────────────────────────────────────────────────
 # LEITURA DO EXCEL (RPA)
-# ==============================
+# ──────────────────────────────────────────────────────────
+
 def ler_planilha_rpa(caminho_excel, log):
     try:
         df = pd.read_excel(caminho_excel, sheet_name=0, header=None)
@@ -300,19 +411,18 @@ def ler_planilha_rpa(caminho_excel, log):
     for i in range(len(df)):
         def cell(r, c):
             return None if c >= ncol else df.iloc[r, c]
-
         def cs(r, c):
             v = cell(r, c)
             return "" if (v is None or pd.isna(v)) else str(v).replace("RELAÇÃO DE RENDIMENTOS - RPA:", "").strip()
 
         if (cs(i,0)=="Código" and cs(i,1)=="Nome" and cs(i,2)=="CPF" and
-            cs(i,3)=="Quantidade" and cs(i,4)=="Categoria" and cs(i,5)=="Próxima" and
-            cs(i,6)=="Descrição" and cs(i,7)=="Rendimento" and cs(i,13)=="Data ISS"):
+                cs(i,3)=="Quantidade" and cs(i,4)=="Categoria" and cs(i,5)=="Próxima" and
+                cs(i,6)=="Descrição" and cs(i,7)=="Rendimento" and cs(i,13)=="Data ISS"):
             inicio, tem_cpf = i + 2, True
             break
         if (cs(i,0)=="Código" and cs(i,1)=="Nome" and
-            cs(i,2)=="Quantidade" and cs(i,3)=="Categoria" and
-            cs(i,4)=="Próxima" and cs(i,5)=="Descrição" and cs(i,6)=="Rendimento"):
+                cs(i,2)=="Quantidade" and cs(i,3)=="Categoria" and
+                cs(i,4)=="Próxima" and cs(i,5)=="Descrição" and cs(i,6)=="Rendimento"):
             inicio = i + 2
             break
 
@@ -387,31 +497,35 @@ def ler_planilha_rpa(caminho_excel, log):
     }
 
 
-# ==============================
-# MONTAGEM DO REGISTRO TXT (266)
-# ==============================
+# ──────────────────────────────────────────────────────────
+# MONTAGEM DO REGISTRO TXT (266 chars)
+# ──────────────────────────────────────────────────────────
+
 def montar_registro_lancamento(meta, reg, log, acum_mes):
     codigo_empresa   = meta["codigo_empresa"]
     competencia_data = meta["competencia"]
     competencia_str  = competencia_aaaamm(competencia_data)
 
-    data_pagto_dt = excel_date_to_datetime(reg.get("data_pagto")) or ultimo_dia_competencia(competencia_data)
+    data_pagto_dt = (
+        excel_date_to_datetime(reg.get("data_pagto"))
+        or ultimo_dia_competencia(competencia_data)
+    )
     data_pagto_str = "00000000" if data_pagto_dt is None else data_pagto_dt.strftime("%Y%m%d")
-    ano_ir   = data_pagto_dt.year if data_pagto_dt is not None else None
+    ano_ir    = data_pagto_dt.year if data_pagto_dt is not None else None
     tabela_ir = tabela_ir_por_data_pagto(data_pagto_dt)
     ded_simpl = deducao_simplificada_por_data_pagto_ou_ano(data_pagto_dt)
 
-    cod_contrib  = reg["cod_contrib"]
-    dependentes  = reg["dependentes"]
-    rpa_num      = reg["rpa_num"]
-    atividade    = reg["atividade"]
-    bruto        = limpar_negativo(reg["bruto"])
-    perc_iss     = limpar_negativo(reg.get("perc_iss", 0.0))
-    pensao_alim  = limpar_negativo(reg.get("pensao_alim", 0.0))
-    outros_desc  = limpar_negativo(reg.get("outros_desc", 0.0))
-    outros_prov  = limpar_negativo(reg.get("outros_prov", 0.0))
+    cod_contrib = reg["cod_contrib"]
+    dependentes = reg["dependentes"]
+    rpa_num     = reg["rpa_num"]
+    atividade   = reg["atividade"]
+    bruto       = limpar_negativo(reg["bruto"])
+    perc_iss    = limpar_negativo(reg.get("perc_iss", 0.0))
+    pensao_alim = limpar_negativo(reg.get("pensao_alim", 0.0))
+    outros_desc = limpar_negativo(reg.get("outros_desc", 0.0))
+    outros_prov = limpar_negativo(reg.get("outros_prov", 0.0))
 
-    dt_iss = excel_date_to_datetime(reg.get("data_iss"))
+    dt_iss        = excel_date_to_datetime(reg.get("data_iss"))
     data_venc_iss = "00000000" if dt_iss is None else dt_iss.strftime("%Y%m%d")
 
     esocial = reg.get("esocial")
@@ -435,47 +549,45 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     if esocial_int in (712, 734):
         base_inss_registro_original = truncar(bruto * 0.20, casas=2)
-        aliquota_inss = 0.20 if esocial_int == 734 else 0.11
+        aliquota_inss    = 0.20 if esocial_int == 734 else 0.11
         inss_frete_sest  = truncar(base_inss_registro_original * 0.015, casas=2)
         inss_frete_senat = truncar(base_inss_registro_original * 0.010, casas=2)
 
-    teto_inss = teto_inss_por_data_pagto(data_pagto_dt)
+    teto_inss  = teto_inss_por_data_pagto(data_pagto_dt)
     saldo_teto = max(truncar(teto_inss - max(truncar(ac.get("outras_fontes_base", 0.0), casas=2), 0.0), casas=2), 0.0)
 
-    base_empresa_anterior = truncar(ac["base_inss_empresa"], casas=2)
-    base_empresa_nova     = truncar(base_empresa_anterior + base_inss_registro_original, casas=2)
-    base_inss_registro_limitada = max(
-        truncar(min(base_empresa_nova, saldo_teto) - min(base_empresa_anterior, saldo_teto), casas=2), 0.0
+    base_emp_ant  = truncar(ac["base_inss_empresa"], casas=2)
+    base_emp_nova = truncar(base_emp_ant + base_inss_registro_original, casas=2)
+    base_inss_reg = max(
+        truncar(min(base_emp_nova, saldo_teto) - min(base_emp_ant, saldo_teto), casas=2), 0.0
     )
+    inss = max(truncar(base_inss_reg * aliquota_inss, casas=2), 0.0)
 
-    inss = max(truncar(base_inss_registro_limitada * aliquota_inss, casas=2), 0.0)
-    ac["base_inss_empresa"]    = base_empresa_nova
-    ac["inss_retido_empresa"]  = truncar(ac["inss_retido_empresa"] + inss, casas=2)
-    base_inss = base_inss_registro_limitada
+    ac["base_inss_empresa"]   = base_emp_nova
+    ac["inss_retido_empresa"] = truncar(ac["inss_retido_empresa"] + inss, casas=2)
+    base_inss = base_inss_reg
 
-    rendimento_tributavel_registro = obter_rendimento_tributavel_irrf(bruto, esocial_int)
-    dep_out = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
-    deduz_inss = esocial_int in (711, 712)
+    rend_trib_reg = obter_rendimento_tributavel_irrf(bruto, esocial_int)
+    dep_out       = max(0, 0 if (dependentes is None or pd.isna(dependentes)) else int(dependentes))
+    deduz_inss    = esocial_int in (711, 712)
 
-    ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"] + rendimento_tributavel_registro, casas=2)
+    ac["rend_trib_irrf"]      = truncar(ac["rend_trib_irrf"] + rend_trib_reg, casas=2)
     ac["inss_dedutivel_irrf"] = truncar(ac["inss_dedutivel_irrf"] + inss, casas=2)
     ac["dependentes"]         = max(ac["dependentes"], dep_out)
 
-    inss_dedutivel_acum = ac["inss_dedutivel_irrf"] if deduz_inss else 0.0
+    inss_ded_acum = ac["inss_dedutivel_irrf"] if deduz_inss else 0.0
 
     if ano_ir in (2025, 2026):
-        ir_total_mes, base_irrf_mes = calcular_irrf_acumulado_generico(
-            ac["rend_trib_irrf"], inss_dedutivel_acum,
-            ac["dependentes"], ano_ir, tabela_ir, ded_simpl
+        ir_total, base_irrf_mes = calcular_irrf_acumulado_generico(
+            ac["rend_trib_irrf"], inss_ded_acum, ac["dependentes"], ano_ir, tabela_ir, ded_simpl
         )
     else:
         log.append(f"Aviso: ano desconhecido ({ano_ir}) para contrib {cod_contrib}; usando 2025.")
-        ir_total_mes, base_irrf_mes = calcular_irrf_acumulado_generico(
-            ac["rend_trib_irrf"], inss_dedutivel_acum,
-            ac["dependentes"], 2025, tabela_ir, ded_simpl
+        ir_total, base_irrf_mes = calcular_irrf_acumulado_generico(
+            ac["rend_trib_irrf"], inss_ded_acum, ac["dependentes"], 2025, tabela_ir, ded_simpl
         )
 
-    ir_calculado = max(truncar(ir_total_mes - truncar(ac["irrf_retido"], casas=2), casas=2), 0.0)
+    ir_calculado = max(truncar(ir_total - truncar(ac["irrf_retido"], casas=2), casas=2), 0.0)
     ac["irrf_retido"] = truncar(ac["irrf_retido"] + ir_calculado, casas=2)
     base_irrf = base_irrf_mes
 
@@ -494,25 +606,25 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
 
     try:
         registro = (
-            fmt_int(codigo_empresa, 7)        +
-            fmt_int(cod_contrib, 10)          +
-            competencia_str                   +
-            fmt_str(atividade, 100)           +
-            fmt_int(rpa_num, 10)              +
-            fmt_num(bruto, 11)                +
-            fmt_num(perc_iss, 5)              +
-            fmt_num(valor_iss, 11)            +
-            data_venc_iss                     +
-            fmt_num(base_inss, 11)            +
-            fmt_num(inss_frete_sest, 8)       +
-            fmt_num(inss_frete_senat, 8)      +
-            fmt_num(inss, 8)                  +
-            fmt_num(pensao_alim, 11)          +
-            fmt_num(outros_desc, 11)          +
-            fmt_num(outros_prov, 11)          +
-            data_pagto_str                    +
-            fmt_num(base_irrf, 11)            +
-            fmt_int(dep_out, 3)               +
+            fmt_int(codigo_empresa, 7)   +
+            fmt_int(cod_contrib, 10)     +
+            competencia_str              +
+            fmt_str(atividade, 100)      +
+            fmt_int(rpa_num, 10)         +
+            fmt_num(bruto, 11)           +
+            fmt_num(perc_iss, 5)         +
+            fmt_num(valor_iss, 11)       +
+            data_venc_iss                +
+            fmt_num(base_inss, 11)       +
+            fmt_num(inss_frete_sest, 8)  +
+            fmt_num(inss_frete_senat, 8) +
+            fmt_num(inss, 8)             +
+            fmt_num(pensao_alim, 11)     +
+            fmt_num(outros_desc, 11)     +
+            fmt_num(outros_prov, 11)     +
+            data_pagto_str               +
+            fmt_num(base_irrf, 11)       +
+            fmt_int(dep_out, 3)          +
             fmt_num(ir_calculado, 8)
         )
     except Exception as e:
@@ -520,15 +632,19 @@ def montar_registro_lancamento(meta, reg, log, acum_mes):
         return None
 
     if len(registro) != 266:
-        log.append(f"ERRO: Registro com tamanho {len(registro)} (esperado 266). Cód={codigo_empresa}, contrib={cod_contrib}")
+        log.append(
+            f"ERRO: Registro com tamanho {len(registro)} (esperado 266). "
+            f"Cód={codigo_empresa}, contrib={cod_contrib}"
+        )
         return None
 
     return registro
 
 
-# ==============================
+# ──────────────────────────────────────────────────────────
 # GERAÇÃO DO TXT
-# ==============================
+# ──────────────────────────────────────────────────────────
+
 def gerar_txt_streamlit(arquivo_bytes, log):
     try:
         meta = ler_planilha_rpa(io.BytesIO(arquivo_bytes), log)
@@ -543,8 +659,7 @@ def gerar_txt_streamlit(arquivo_bytes, log):
             int(r.get("linha_excel") or 0),
         ))
 
-        linhas_txt = []
-        acum_mes   = {}
+        linhas_txt, acum_mes = [], {}
         for reg in meta["registros"]:
             linha = montar_registro_lancamento(meta, reg, log, acum_mes)
             if linha is not None:
@@ -566,33 +681,38 @@ def gerar_txt_streamlit(arquivo_bytes, log):
         return None
 
 
-# ==============================
-# UTILITÁRIO — lê bgr_base64.txt
-# ==============================
+# ──────────────────────────────────────────────────────────
+# UTILITÁRIO — lê bgr_base64.txt e devolve bytes do BGR
+# ──────────────────────────────────────────────────────────
+
 def carregar_bgr_bytes():
-    caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bgr_base64.txt")
+    """
+    Procura bgr_base64.txt na mesma pasta do app.py.
+    Retorna (bytes_decodificados, None) ou (None, msg_erro).
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    caminho  = os.path.join(base_dir, "bgr_base64.txt")
+
     if not os.path.exists(caminho):
         return None, "Arquivo bgr_base64.txt não encontrado na pasta do app."
     try:
         with open(caminho, "r", encoding="utf-8") as f:
             conteudo = f.read().strip()
-        if "," in conteudo and conteudo.startswith("data:"):
+        # Remove prefixo data:... se existir
+        if conteudo.startswith("data:") and "," in conteudo:
             conteudo = conteudo.split(",", 1)[1]
         return base64.b64decode(conteudo), None
     except Exception as e:
         return None, f"Erro ao decodificar bgr_base64.txt: {e}"
 
 
-# ==============================
-# CSS GLOBAL — Tema TR / Domínio Escuro
-# ==============================
+# ──────────────────────────────────────────────────────────
+# CSS GLOBAL — Tema Thomson Reuters / Domínio Escuro
+# ──────────────────────────────────────────────────────────
+
 TR_DARK_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-/* ── Reset e base ───────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
-
+/* ── Base ───────────────────────────────────────────── */
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"], .main {
     background-color: #0D1117 !important;
@@ -601,44 +721,33 @@ TR_DARK_CSS = """
     background-color: #0D1117 !important;
     border-right: 1px solid #21262D !important;
 }
-[data-testid="stSidebarContent"] {
-    padding: 0 !important;
-}
+[data-testid="stSidebarContent"] { padding: 0 !important; }
 
 html, body, [class*="css"] {
-    font-family: 'Inter', 'Segoe UI', sans-serif !important;
+    font-family: 'Segoe UI', 'Inter', sans-serif !important;
     color: #E6EDF3 !important;
 }
-h1,h2,h3,h4,h5,h6 {
-    color: #E6EDF3 !important;
-    font-weight: 700 !important;
-}
+h1,h2,h3,h4,h5,h6 { color: #E6EDF3 !important; font-weight: 700 !important; }
 
 /* ── Botão primário ─────────────────────────────────── */
 [data-testid="stButton"] button[kind="primary"] {
     background: linear-gradient(135deg, #FF6200, #E05500) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
+    color: #fff !important; border: none !important;
+    border-radius: 6px !important; font-weight: 700 !important;
     box-shadow: 0 2px 10px rgba(255,98,0,.4) !important;
     transition: opacity .2s, transform .1s !important;
 }
 [data-testid="stButton"] button[kind="primary"]:hover  { opacity:.88 !important; transform:translateY(-1px) !important; }
 [data-testid="stButton"] button[kind="primary"]:active { transform:translateY(0) !important; }
 [data-testid="stButton"] button[kind="primary"]:disabled {
-    background: #2D333B !important; color: #484F58 !important; box-shadow:none !important;
+    background: #2D333B !important; color: #484F58 !important; box-shadow: none !important;
 }
 
 /* ── Botão secundário ───────────────────────────────── */
 [data-testid="stButton"] button[kind="secondary"] {
-    background-color: #21262D !important;
-    color: #E6EDF3 !important;
-    border: 1px solid #30363D !important;
-    border-radius: 6px !important;
-    font-weight: 500 !important;
-    transition: background-color .2s !important;
+    background-color: #21262D !important; color: #E6EDF3 !important;
+    border: 1px solid #30363D !important; border-radius: 6px !important;
+    font-weight: 500 !important; transition: background-color .2s !important;
 }
 [data-testid="stButton"] button[kind="secondary"]:hover {
     background-color: #2D333B !important; border-color: #484F58 !important;
@@ -647,10 +756,8 @@ h1,h2,h3,h4,h5,h6 {
 /* ── Download button ────────────────────────────────── */
 [data-testid="stDownloadButton"] button {
     background: linear-gradient(135deg, #006AFF, #0054CC) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    font-weight: 700 !important;
+    color: #fff !important; border: none !important;
+    border-radius: 6px !important; font-weight: 700 !important;
     box-shadow: 0 2px 10px rgba(0,106,255,.4) !important;
     transition: opacity .2s !important;
 }
@@ -665,144 +772,129 @@ h1,h2,h3,h4,h5,h6 {
 }
 [data-testid="stFileUploader"]:hover { border-color: #FF6200 !important; }
 
-/* ── Divisor nativo ─────────────────────────────────── */
+/* ── Divisor ────────────────────────────────────────── */
 hr { border-color: #21262D !important; }
 
 /* ── Scrollbar ──────────────────────────────────────── */
-::-webkit-scrollbar { width:6px; height:6px; }
-::-webkit-scrollbar-track { background:#161B22; }
-::-webkit-scrollbar-thumb { background:#30363D; border-radius:3px; }
-::-webkit-scrollbar-thumb:hover { background:#484F58; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #161B22; }
+::-webkit-scrollbar-thumb { background: #30363D; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484F58; }
 </style>
 """
 
 
-# ==============================
-# SIDEBAR
-# ==============================
+# ──────────────────────────────────────────────────────────
+# SIDEBAR  — 100 % componentes nativos Streamlit
+# (zero HTML aninhado → sem risco de escaping)
+# ──────────────────────────────────────────────────────────
+
 def render_sidebar():
     with st.sidebar:
 
-        # ── Cabeçalho da sidebar ─────────────────────────
-        st.markdown("""
-            <div style="
-                background: linear-gradient(180deg,#1C2128 0%,#161B22 100%);
-                border-bottom: 1px solid #21262D;
-                padding: 20px 16px 16px;
-                margin-bottom: 4px;
-            ">
-                <div style="
-                    font-size:9px; font-weight:800; letter-spacing:.18em;
-                    color:#FF6200; text-transform:uppercase; margin-bottom:4px;
-                ">Thomson Reuters</div>
-                <div style="font-size:16px; font-weight:700; color:#E6EDF3; line-height:1.2;">
-                    Domínio Sistemas
-                </div>
-                <div style="font-size:11px; color:#8B949E; margin-top:3px;">
-                    Gerador RPA &nbsp;·&nbsp; Utilitários
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # ── Seção BGR ────────────────────────────────────
-        st.markdown("""
-            <div style="padding: 16px 16px 0;">
-                <div style="
-                    display:flex; align-items:center; gap:8px;
-                    border-left:3px solid #006AFF;
-                    padding-left:10px; margin-bottom:12px;
-                ">
-                    <span style="font-size:18px;">🖼️</span>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:#E6EDF3;">
-                            Arquivo BGR
-                        </div>
-                        <div style="font-size:11px; color:#8B949E;">
-                            Background · Domínio Sistemas
-                        </div>
-                    </div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # Descrição em texto nativo (sem HTML aninhado)
-        st.caption(
-            "Instale o plano de fundo personalizado no Domínio Sistemas via "
-            "**Utilitários → Personalizar → BGR**."
+        # ── Cabeçalho ────────────────────────────────────
+        st.markdown(
+            "<div style='background:linear-gradient(180deg,#1C2128,#161B22);"
+            "border-bottom:1px solid #21262D;padding:18px 16px 14px;'>"
+            "<div style='font-size:9px;font-weight:800;letter-spacing:.18em;"
+            "color:#FF6200;text-transform:uppercase;margin-bottom:3px;'>"
+            "Thomson Reuters</div>"
+            "<div style='font-size:15px;font-weight:700;color:#E6EDF3;'>Domínio Sistemas</div>"
+            "<div style='font-size:11px;color:#8B949E;margin-top:2px;'>"
+            "Gerador RPA &nbsp;·&nbsp; Utilitários</div>"
+            "</div>",
+            unsafe_allow_html=True,
         )
 
-        # Botão de download BGR
+        st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
+
+        # ── Título da seção BGR ───────────────────────────
+        st.markdown(
+            "<div style='padding:0 12px;'>"
+            "<div style='border-left:3px solid #006AFF;padding-left:10px;margin-bottom:6px;'>"
+            "<span style='font-size:13px;font-weight:700;color:#E6EDF3;'>🖼️ Arquivo BGR</span><br>"
+            "<span style='font-size:11px;color:#8B949E;'>Background · Domínio Sistemas</span>"
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+
+        # Descrição — st.caption (nativo, sem HTML)
+        st.caption(
+            "Instale o plano de fundo personalizado no Domínio Sistemas "
+            "via Utilitários → Personalizar → BGR."
+        )
+
+        # ── Botão de download BGR ─────────────────────────
         bgr_bytes, bgr_erro = carregar_bgr_bytes()
 
-        with st.container():
-            if bgr_bytes is not None:
-                st.download_button(
-                    label="⬇  Baixar bgr_base64.txt",
-                    data=bgr_bytes,
-                    file_name="bgr_base64.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    help="Clique para baixar o arquivo de background do Domínio Sistemas",
-                )
-                st.markdown(
-                    f"<div style='font-size:11px;color:#3FB950;margin-top:4px;'>"
-                    f"✔ Arquivo disponível · {len(bgr_bytes):,} bytes</div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(
-                    f"<div style='background:#1A0D0D;border:1px solid #DA3633;"
-                    f"border-radius:6px;padding:10px 12px;font-size:12px;"
-                    f"color:#F85149;'>"
-                    f"⚠ BGR não encontrado<br>"
-                    f"<span style='color:#8B949E;font-size:11px;'>{bgr_erro}</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+        if bgr_bytes is not None:
+            st.download_button(
+                label="⬇  Baixar BGR para Domínio",
+                data=bgr_bytes,
+                # ✅ Nome do arquivo corrigido conforme solicitado
+                file_name=NOME_ARQUIVO_BGR,
+                mime="application/octet-stream",
+                use_container_width=True,
+                help=f"Salva como: {NOME_ARQUIVO_BGR}",
+            )
+            st.markdown(
+                f"<div style='font-size:11px;color:#3FB950;margin:4px 0 0 2px;'>"
+                f"✔ Disponível · {len(bgr_bytes):,} bytes</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.error(f"⚠ BGR não encontrado\n\n{bgr_erro}", icon=None)
 
-        st.markdown("<div style='margin:16px 0 4px;'>", unsafe_allow_html=True)
         st.divider()
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # ── Instruções de instalação (componentes nativos) ─
+        # ── Passo a passo — componentes nativos ───────────
         st.markdown(
-            "<div style='font-size:11px;font-weight:700;letter-spacing:.1em;"
-            "color:#8B949E;text-transform:uppercase;padding:0 0 10px;'>"
+            "<div style='font-size:10px;font-weight:700;letter-spacing:.1em;"
+            "color:#8B949E;text-transform:uppercase;margin-bottom:8px;'>"
             "📋 Como instalar o BGR</div>",
             unsafe_allow_html=True,
         )
 
+        # Cada passo é um st.markdown simples de UMA linha — sem aninhamento
         passos = [
-            ("🟠", "Baixe o arquivo **bgr_base64.txt** acima"),
-            ("🟠", "Abra o **Domínio Sistemas**"),
-            ("🟠", "Acesse **Utilitários → Personalizar**"),
-            ("🟠", "Importe o **.txt** na aba **BGR**"),
-            ("🟢", "Reinicie o sistema para aplicar"),
+            ("🟠", "1", "Baixe o arquivo **BGR** acima"),
+            ("🟠", "2", "Abra o **Domínio Sistemas**"),
+            ("🟠", "3", "Acesse **Utilitários → Personalizar**"),
+            ("🟠", "4", "Importe na aba **BGR**"),
+            ("🟢", "✓", "Reinicie o sistema para aplicar"),
         ]
-        for icone, texto in passos:
+
+        for cor, num, texto in passos:
+            bg  = "#FF6200" if cor == "🟠" else "#3FB950"
             st.markdown(
-                f"<div style='display:flex;align-items:flex-start;gap:8px;"
-                f"margin-bottom:8px;'>"
-                f"<span style='font-size:12px;margin-top:1px;'>{icone}</span>"
-                f"<span style='font-size:12px;color:#C9D1D9;line-height:1.5;'>{texto}</span>"
-                f"</div>",
+                f"<div style='display:flex;align-items:flex-start;"
+                f"gap:8px;margin-bottom:7px;'>"
+                f"<div style='min-width:18px;height:18px;background:{bg};"
+                f"border-radius:50%;font-size:10px;font-weight:800;color:#fff;"
+                f"display:flex;align-items:center;justify-content:center;"
+                f"flex-shrink:0;margin-top:1px;'>{num}</div>"
+                f"<span style='font-size:12px;color:#C9D1D9;line-height:1.5;'>"
+                f"{texto}</span></div>",
                 unsafe_allow_html=True,
             )
 
-        # ── Rodapé da sidebar ─────────────────────────────
         st.divider()
+
+        # ── Rodapé ────────────────────────────────────────
         st.markdown(
-            f"<div style='text-align:center;font-size:11px;color:#484F58;line-height:1.7;'>"
-            f"Gerador RPA · <span style='color:#FF6200;font-weight:700;'>{VERSAO}</span><br>"
-            f"Thomson Reuters · Domínio Sistemas"
-            f"</div>",
+            f"<div style='text-align:center;font-size:11px;color:#484F58;"
+            f"line-height:1.7;padding-bottom:8px;'>"
+            f"Gerador RPA · "
+            f"<span style='color:#FF6200;font-weight:700;'>{VERSAO}</span><br>"
+            f"Thomson Reuters · Domínio Sistemas</div>",
             unsafe_allow_html=True,
         )
 
 
-# ==============================
+# ──────────────────────────────────────────────────────────
 # MAIN
-# ==============================
+# ──────────────────────────────────────────────────────────
+
 def main():
     st.set_page_config(
         page_title=f"Gerador TXT — RPA | {VERSAO}",
@@ -813,56 +905,46 @@ def main():
     st.markdown(TR_DARK_CSS, unsafe_allow_html=True)
     render_sidebar()
 
-    # ── Header ───────────────────────────────────────────
-    st.markdown(f"""
-        <div style="
-            background:linear-gradient(135deg,#161B22 0%,#1C2128 100%);
-            border:1px solid #21262D; border-top:3px solid #FF6200;
-            border-radius:10px; padding:26px 28px 18px; margin-bottom:24px;
-        ">
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">
-                <span style="font-size:26px;">📄</span>
-                <div style="flex:1;">
-                    <div style="font-size:10px;font-weight:800;letter-spacing:.14em;
-                                color:#FF6200;text-transform:uppercase;margin-bottom:2px;">
-                        Thomson Reuters · Domínio Sistemas
-                    </div>
-                    <div style="font-size:20px;font-weight:700;color:#E6EDF3;letter-spacing:-.02em;">
-                        Gerador de Arquivo TXT — RPA
-                    </div>
-                </div>
-                <div style="background:#21262D;border:1px solid #30363D;border-radius:20px;
-                            padding:3px 14px;font-size:12px;font-weight:700;
-                            color:#8B949E;letter-spacing:.06em;">
-                    {VERSAO}
-                </div>
-            </div>
-            <p style="margin:8px 0 0 40px;font-size:13px;color:#8B949E;line-height:1.5;">
-                Importe o Excel de origem e clique em
-                <strong style="color:#E6EDF3;">Gerar arquivo TXT</strong>
-                para processar os lançamentos RPA.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+    # ── Header ────────────────────────────────────────────
+    st.markdown(
+        f"<div style='background:linear-gradient(135deg,#161B22,#1C2128);"
+        f"border:1px solid #21262D;border-top:3px solid #FF6200;"
+        f"border-radius:10px;padding:24px 28px 16px;margin-bottom:22px;'>"
+        f"<div style='display:flex;align-items:center;gap:12px;'>"
+        f"<span style='font-size:26px;'>📄</span>"
+        f"<div style='flex:1;'>"
+        f"<div style='font-size:10px;font-weight:800;letter-spacing:.14em;"
+        f"color:#FF6200;text-transform:uppercase;margin-bottom:2px;'>"
+        f"Thomson Reuters · Domínio Sistemas</div>"
+        f"<div style='font-size:20px;font-weight:700;color:#E6EDF3;'>"
+        f"Gerador de Arquivo TXT — RPA</div></div>"
+        f"<div style='background:#21262D;border:1px solid #30363D;"
+        f"border-radius:20px;padding:3px 14px;font-size:12px;"
+        f"font-weight:700;color:#8B949E;'>{VERSAO}</div>"
+        f"</div>"
+        f"<p style='margin:8px 0 0 38px;font-size:13px;color:#8B949E;'>"
+        f"Importe o Excel e clique em "
+        f"<strong style='color:#E6EDF3;'>Gerar arquivo TXT</strong> "
+        f"para processar os lançamentos RPA.</p></div>",
+        unsafe_allow_html=True,
+    )
 
     # ── Session state ─────────────────────────────────────
-    if "log"        not in st.session_state: st.session_state.log        = [f"✔ Aplicação pronta — {VERSAO}"]
+    if "log"        not in st.session_state: st.session_state.log        = [f"✔ Pronto — {VERSAO}"]
     if "txt_gerado" not in st.session_state: st.session_state.txt_gerado = None
     if "meta_info"  not in st.session_state: st.session_state.meta_info  = None
 
     # ── Upload ────────────────────────────────────────────
-    st.markdown("""
-        <div style="background:#161B22;border:1px solid #21262D;border-radius:8px;
-                    padding:16px 16px 2px;margin-bottom:14px;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;
-                        color:#8B949E;text-transform:uppercase;margin-bottom:8px;">
-                📂 Arquivo de entrada
-            </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown(
+        "<div style='background:#161B22;border:1px solid #21262D;"
+        "border-radius:8px;padding:14px 16px 2px;margin-bottom:14px;'>"
+        "<div style='font-size:10px;font-weight:700;letter-spacing:.1em;"
+        "color:#8B949E;text-transform:uppercase;margin-bottom:8px;'>"
+        "📂 Arquivo de entrada</div>",
+        unsafe_allow_html=True,
+    )
     arquivo = st.file_uploader(
-        "Excel de entrada",
-        type=["xlsx", "xls"],
+        "Excel de entrada", type=["xlsx", "xls"],
         help="Planilha de Relação de Rendimentos — RPA",
         label_visibility="collapsed",
     )
@@ -899,10 +981,10 @@ def main():
                 _meta = ler_planilha_rpa(io.BytesIO(arquivo_bytes), [])
                 if _meta:
                     st.session_state.meta_info = {
-                        "empresa":    _meta.get("razao_social", "—"),
-                        "cnpj":       _meta.get("cnpj", "—"),
+                        "empresa":     _meta.get("razao_social", "—"),
+                        "cnpj":        _meta.get("cnpj", "—"),
                         "competencia": competencia_aaaamm(_meta.get("competencia")),
-                        "registros":  len(linhas),
+                        "registros":   len(linhas),
                     }
             except Exception:
                 pass
@@ -911,9 +993,10 @@ def main():
     # ── Cards de resultado ────────────────────────────────
     if st.session_state.txt_gerado is not None:
         if st.session_state.meta_info:
-            m = st.session_state.meta_info
+            m    = st.session_state.meta_info
             comp = (f"{m['competencia'][4:6]}/{m['competencia'][:4]}"
                     if len(m["competencia"]) == 6 else m["competencia"])
+
             c_emp, c_cnpj, c_comp, c_reg = st.columns(4)
             for col, label, valor, cor in [
                 (c_emp,  "Empresa",     m["empresa"],   "#FF6200"),
@@ -922,43 +1005,42 @@ def main():
                 (c_reg,  "Registros",   m["registros"], "#3FB950"),
             ]:
                 with col:
-                    st.markdown(f"""
-                        <div style="background:#161B22;border:1px solid #21262D;
-                                    border-top:2px solid {cor};border-radius:8px;
-                                    padding:14px;margin-bottom:12px;">
-                            <div style="font-size:10px;font-weight:700;letter-spacing:.1em;
-                                        color:#8B949E;text-transform:uppercase;margin-bottom:4px;">
-                                {label}
-                            </div>
-                            <div style="font-size:{'20px' if label=='Registros' else '13px'};
-                                        font-weight:700;color:{cor if label=='Registros' else '#E6EDF3'};
-                                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                                 title="{valor}">{valor}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='background:#161B22;border:1px solid #21262D;"
+                        f"border-top:2px solid {cor};border-radius:8px;"
+                        f"padding:14px;margin-bottom:12px;'>"
+                        f"<div style='font-size:10px;font-weight:700;letter-spacing:.1em;"
+                        f"color:#8B949E;text-transform:uppercase;margin-bottom:4px;'>{label}</div>"
+                        f"<div style='font-size:{'20px' if label=='Registros' else '13px'};"
+                        f"font-weight:700;"
+                        f"color:{cor if label=='Registros' else '#E6EDF3'};"
+                        f"overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'"
+                        f"title='{valor}'>{valor}</div></div>",
+                        unsafe_allow_html=True,
+                    )
 
-        st.markdown("""
-            <div style="background:#0D2818;border:1px solid #238636;border-left:4px solid #3FB950;
-                        border-radius:8px;padding:12px 18px;margin-bottom:12px;
-                        display:flex;align-items:center;gap:10px;">
-                <span style="font-size:18px;">✅</span>
-                <span style="font-size:14px;font-weight:600;color:#3FB950;">
-                    Arquivo gerado com sucesso! Clique abaixo para baixar.
-                </span>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            "<div style='background:#0D2818;border:1px solid #238636;"
+            "border-left:4px solid #3FB950;border-radius:8px;"
+            "padding:12px 18px;margin-bottom:12px;"
+            "display:flex;align-items:center;gap:10px;'>"
+            "<span style='font-size:18px;'>✅</span>"
+            "<span style='font-size:14px;font-weight:600;color:#3FB950;'>"
+            "Arquivo gerado com sucesso! Clique abaixo para baixar.</span></div>",
+            unsafe_allow_html=True,
+        )
 
         st.download_button(
             label="⬇  Baixar arquivo TXT",
             data=st.session_state.txt_gerado,
-            file_name="saida_rpa.txt",
+            file_name="Relação de Rendimentos - RPA.txt",
             mime="text/plain",
             use_container_width=True,
             type="primary",
         )
 
     # ── Log ───────────────────────────────────────────────
-    st.markdown("<div style='margin-top:24px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:22px;'></div>", unsafe_allow_html=True)
 
     tem_erro  = any(str(l).startswith("ERRO")  for l in st.session_state.log)
     tem_aviso = any(str(l).startswith("Aviso") for l in st.session_state.log)
@@ -970,38 +1052,36 @@ def main():
     else:
         acc, brd, bg, ico, lbl = "#3FB950","#238636","#0D1A10","🟢","OK"
 
-    st.markdown(f"""
-        <div style="background:#161B22;border:1px solid #21262D;
-                    border-top:2px solid {acc};border-radius:8px;overflow:hidden;">
-            <div style="background:#1C2128;padding:10px 16px;border-bottom:1px solid #21262D;
-                        display:flex;align-items:center;gap:8px;">
-                <span>{ico}</span>
-                <span style="font-size:11px;font-weight:700;letter-spacing:.08em;
-                             color:#8B949E;text-transform:uppercase;">
-                    Log de processamento — {lbl}
-                </span>
-            </div>
-            <div style="background:{bg};border-left:3px solid {brd};margin:12px;
-                        border-radius:4px;padding:12px 14px;
-                        font-family:'Cascadia Code','Fira Code','Consolas',monospace;
-                        font-size:12.5px;line-height:1.7;white-space:pre-wrap;
-                        max-height:280px;overflow-y:auto;color:#C9D1D9;">
-{chr(10).join(str(l) for l in st.session_state.log)}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='background:#161B22;border:1px solid #21262D;"
+        f"border-top:2px solid {acc};border-radius:8px;overflow:hidden;'>"
+        f"<div style='background:#1C2128;padding:10px 16px;"
+        f"border-bottom:1px solid #21262D;display:flex;align-items:center;gap:8px;'>"
+        f"<span>{ico}</span>"
+        f"<span style='font-size:11px;font-weight:700;letter-spacing:.08em;"
+        f"color:#8B949E;text-transform:uppercase;'>"
+        f"Log de processamento — {lbl}</span></div>"
+        f"<div style='background:{bg};border-left:3px solid {brd};"
+        f"margin:12px;border-radius:4px;padding:12px 14px;"
+        f"font-family:Cascadia Code,Fira Code,Consolas,monospace;"
+        f"font-size:12.5px;line-height:1.7;white-space:pre-wrap;"
+        f"max-height:280px;overflow-y:auto;color:#C9D1D9;'>"
+        f"{chr(10).join(str(l) for l in st.session_state.log)}"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
 
     # ── Rodapé ────────────────────────────────────────────
-    st.markdown(f"""
-        <div style="margin-top:32px;padding-top:14px;border-top:1px solid #21262D;
-                    display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:11px;color:#484F58;">
-                Thomson Reuters · Domínio Sistemas · Gerador RPA
-            </span>
-            <span style="font-size:11px;font-weight:800;
-                         letter-spacing:.08em;color:#FF6200;">{VERSAO}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='margin-top:28px;padding-top:12px;"
+        f"border-top:1px solid #21262D;"
+        f"display:flex;justify-content:space-between;align-items:center;'>"
+        f"<span style='font-size:11px;color:#484F58;'>"
+        f"Thomson Reuters · Domínio Sistemas · Gerador RPA</span>"
+        f"<span style='font-size:11px;font-weight:800;"
+        f"letter-spacing:.08em;color:#FF6200;'>{VERSAO}</span></div>",
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
