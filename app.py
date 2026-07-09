@@ -1,9 +1,10 @@
-import os
-import io
-import re
 import math
+import re
+import io
+import os
 import base64
 import pandas as pd
+
 from datetime import datetime, date
 import traceback
 import streamlit as st
@@ -18,7 +19,72 @@ VERSAO = "V3.9"
 # ==============================
 def apply_tr_theme():
     st.markdown("""
-@@ -87,724 +88,441 @@ def apply_tr_theme():
+        <style>
+        html, body, [class*="css"] {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            color: #444444;
+        }
+        h1, h2, h3 {
+            color: #FF8000;
+            font-weight: 700;
+        }
+        section[data-testid="stSidebar"] {
+            background-color: #444444;
+            color: #FFFFFF;
+        }
+        section[data-testid="stSidebar"] * {
+            color: #FFFFFF !important;
+        }
+        .stButton > button {
+            background-color: #FF8000;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .stButton > button:hover {
+            background-color: #D64001;
+            color: #FFFFFF;
+        }
+        .stDownloadButton > button {
+            background-color: #FF8000;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .stDownloadButton > button:hover {
+            background-color: #D64001;
+            color: #FFFFFF;
+        }
+        hr {
+            border-color: #FF8000;
+        }
+        [data-testid="metric-container"] {
+            background-color: #E9E9E9;
+            border-left: 4px solid #FF8000;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .instrucoes-box {
+            background-color: #E9E9E9;
+            border-left: 4px solid #FF8000;
+            border-radius: 4px;
+            padding: 16px 20px;
+            margin: 12px 0;
+            color: #444444;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        .instrucoes-box h4 {
+            color: #FF8000;
+            margin-top: 14px;
+            margin-bottom: 6px;
+        }
+        .instrucoes-box h4:first-child {
+            margin-top: 0;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 
 # ==============================
@@ -975,7 +1041,14 @@ def gerar_txt_streamlit(arquivo_bytes, log):
 
 
 # ==============================
-@@ -819,92 +537,81 @@ def main():
+# INTERFACE STREAMLIT
+# ==============================
+def main():
+    st.set_page_config(
+        page_title="Domínio Sistemas | Thomson Reuters",
+        page_icon="🟠",
+        layout="wide",
+        initial_sidebar_state="expanded",
     )
     apply_tr_theme()
 
@@ -1089,7 +1162,9 @@ def gerar_txt_streamlit(arquivo_bytes, log):
             </ul>
 
             </div>
-@@ -914,67 +621,134 @@ def main():
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.markdown("---")
 
@@ -1224,7 +1299,15 @@ def gerar_txt_streamlit(arquivo_bytes, log):
     cor_borda = "#D32F2F" if tem_erro else "#388E3C"
 
     st.markdown(
-@@ -990,6 +764,12 @@ def main():
+        f"""
+        <div style="background:#FCFCFC; border:1px solid {cor_borda};
+                    border-radius:6px; padding:14px;
+                    font-family:Consolas,monospace; font-size:13px;
+                    white-space:pre-wrap; max-height:340px;
+                    overflow-y:auto; color:#1F1F1F;">
+{log_texto}
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
